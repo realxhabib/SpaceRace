@@ -314,8 +314,11 @@ class GameClient {
         this.lastCleanupTime = Date.now();
         this.cleanupInterval = 5000; // Clean up every 5 seconds
         
-        // Increased from 50 to 80 for more asteroids
-        const asteroidCount = 80; // Increased pool size to allow for more active asteroids
+        // Reduce asteroid count for more spacing between them
+        const asteroidCount = 60; // Reduced from 80 to create more space between asteroids
+        
+        // Track active asteroid positions to ensure minimum spacing
+        this.minimumAsteroidSpacing = 60; // Minimum units between asteroids
         
         if (!this.models.asteroids || this.models.asteroids.length === 0) {
             console.error('No asteroid models available!');
@@ -355,12 +358,12 @@ class GameClient {
             });
         }
 
-        // Base wave configuration - increase number of asteroids per wave
+        // Wave configuration - less asteroids per wave but with wider spread
         this.waveConfig = {
-            minAsteroidsPerWave: 5, // Increased from 3 to 5
-            maxAsteroidsPerWave: 10, // Increased from 6 to 10
-            minWaveDelay: 3000,
-            maxWaveDelay: 6000,
+            minAsteroidsPerWave: 3, // Reduced from 5 to 3 for more spacing
+            maxAsteroidsPerWave: 6, // Reduced from 10 to 6 for more spacing
+            minWaveDelay: 3500, // Increased from 3000 to give more time between waves
+            maxWaveDelay: 7000, // Increased from 6000 to give more time between waves
             lastWaveTime: 0,
             baseDirection: new THREE.Vector3(0, 0, 1)
         };
@@ -375,24 +378,26 @@ class GameClient {
     }
 
     updateWaves() {
+        if (!this.gameState.isRunning) return;
+        
         const now = Date.now();
-        if (now - this.waveConfig.lastWaveTime < this.waveConfig.currentDelay) return;
-
-        // Start new wave
-        const asteroidCount = Math.floor(
-            this.waveConfig.minAsteroidsPerWave + 
-            Math.random() * (this.waveConfig.maxAsteroidsPerWave - this.waveConfig.minAsteroidsPerWave)
-        );
-
-        // Spawn wave of asteroids
-        for (let i = 0; i < asteroidCount; i++) {
-            this.spawnAsteroid(true);
+        
+        // Check if it's time for a new wave
+        if (now - this.waveConfig.lastWaveTime > this.waveConfig.maxWaveDelay) {
+            this.spawnAsteroidWave();
+            this.waveConfig.lastWaveTime = now;
+            return;
         }
-
-        // Set next wave timing
-        this.waveConfig.lastWaveTime = now;
-        this.waveConfig.currentDelay = this.waveConfig.minWaveDelay + 
-            Math.random() * (this.waveConfig.maxWaveDelay - this.waveConfig.minWaveDelay);
+        
+        // Random chance for a wave between min and max delay
+        if (now - this.waveConfig.lastWaveTime > this.waveConfig.minWaveDelay) {
+            // Reduced probability of spawning waves to space them out more
+            const probability = 0.05; // Reduced from default wave probability for more spacing
+            if (Math.random() < probability) {
+                this.spawnAsteroidWave();
+                this.waveConfig.lastWaveTime = now;
+            }
+        }
     }
 
     spawnAsteroid(isWave = false) {
@@ -424,8 +429,8 @@ class GameClient {
                 inactive: false
             };
             
-            // Randomize asteroid size (but significantly smaller than before - 0.5 to 1.5 instead of 1.0 to 3.0)
-            asteroid.size = 0.5 + Math.random() * 1.0;
+            // Randomize asteroid size with MUCH smaller values (0.2 to 0.6 instead of 0.5 to 1.5)
+            asteroid.size = 0.2 + Math.random() * 0.4;
             
             // Check if we have a specific asteroid model or fall back to models.asteroids
             if (this.asteroidModel && this.asteroidModel.geometry) {
@@ -453,33 +458,55 @@ class GameClient {
                 asteroid.mesh = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
             }
             
-            // Scale based on size - REDUCE the size multiplier to make asteroids smaller
-            // Use a much smaller scaling factor (was just asteroid.size before)
-            asteroid.mesh.scale.set(asteroid.size * 0.5, asteroid.size * 0.5, asteroid.size * 0.5);
+            // Scale based on size - DRASTICALLY reduce the size multiplier to make asteroids tiny
+            // Apply a much smaller scaling factor of 0.15 (was 0.5 before)
+            asteroid.mesh.scale.set(asteroid.size * 0.15, asteroid.size * 0.15, asteroid.size * 0.15);
             
-            // Spawn position logic - improved to target player more directly
-            const spawnDistance = 250;
+            // INCREASE spawn distance to spread asteroids farther apart
+            const spawnDistance = 350; // Increased from 250 to spread asteroids out more
             
-            // Wider cone angle for asteroids approach (increased for more spread)
-            // At level 1: 80 degrees cone (increased from 60), at higher levels: still wider cone
-            const angleSpread = Math.max(Math.PI/2.25 * (1 - (this.difficultyLevel - 1) * 0.05), Math.PI/4);
+            // Wider cone angle for asteroids approach (SIGNIFICANTLY increased for much more spread)
+            // Using a much wider angle spread for better distribution
+            const angleSpread = Math.PI * 0.75; // 135 degrees - dramatically increased from 80 degrees
             
             // Angle centered on player with spread based on difficulty
             const baseAngle = Math.atan2(playerMesh.position.y, playerMesh.position.x);
             const angle = baseAngle + (Math.random() * 2 - 1) * angleSpread;
             
-            // Increased radial spread to make asteroids come from wider angles
-            const radialSpread = Math.max(120 - (this.difficultyLevel - 1) * 4, 60);
-            const radialDistance = Math.random() * radialSpread;
+            // GREATLY increased radial spread to make asteroids come from much wider angles
+            const radialSpread = 200 + Math.random() * 150; // 200-350 units - dramatically increased
+            const radialDistance = radialSpread;
             
             const spawnPosition = playerMesh.position.clone();
             
-            // Add randomized Z offset to make asteroids come in at angles (not just from behind)
-            const zVariance = (Math.random() * 100) - 50; // -50 to +50
+            // Add LARGER randomized Z offset to make asteroids come in at varied distances
+            const zVariance = (Math.random() * 200) - 100; // -100 to +100 (doubled from before)
             spawnPosition.z -= spawnDistance + zVariance;
             
             spawnPosition.x += Math.cos(angle) * radialDistance;
             spawnPosition.y += Math.sin(angle) * radialDistance;
+            
+            // Check if this position is too close to existing asteroids
+            let tooClose = false;
+            if (this.asteroids && this.asteroids.length > 0) {
+                for (const existingAsteroid of this.asteroids) {
+                    if (existingAsteroid.mesh && existingAsteroid.active) {
+                        const distance = spawnPosition.distanceTo(existingAsteroid.mesh.position);
+                        if (distance < this.minimumAsteroidSpacing) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // If too close to another asteroid, skip this spawn attempt
+            if (tooClose) {
+                if (asteroid.mesh) {
+                    this.scene.remove(asteroid.mesh);
+                }
+                return null;
+            }
             
             asteroid.mesh.position.copy(spawnPosition);
             asteroid.mesh.visible = true;
@@ -490,13 +517,13 @@ class GameClient {
             asteroid.creationTime = Date.now();
 
             // Reduced targeting factor based on difficulty (0 = no tracking, 1 = perfect tracking)
-            // Reduced by ~30% to make asteroids less accurate at tracking the player
-            asteroid.targetingFactor = Math.min((this.difficultyLevel - 1) * 0.07, 0.5); // Reduced from 0.1 to 0.07, max from 0.7 to 0.5
+            // Further reduced targeting to make asteroids less focused on the player
+            asteroid.targetingFactor = Math.min((this.difficultyLevel - 1) * 0.05, 0.4); // Reduced from 0.07 to 0.05, max from 0.5 to 0.4
             
-            // Speed scales with difficulty - more aggressive scaling
-            const difficultySpeedMultiplier = 1 + (this.difficultyLevel - 1) * 0.15; // 15% speed increase per level
+            // Speed scales with difficulty - adjusted to compensate for wider spread
+            const difficultySpeedMultiplier = 1 + (this.difficultyLevel - 1) * 0.12; // Reduced from 0.15 to 0.12
             const baseSpeed = 0.4 * difficultySpeedMultiplier;
-            const speedVariation = 0.1;
+            const speedVariation = 0.15; // Increased from 0.1 for more varied speeds
             
             // Direction now factors in player position for targeting
             const playerDirection = new THREE.Vector3().subVectors(
@@ -504,13 +531,13 @@ class GameClient {
                 asteroid.mesh.position
             ).normalize();
             
-            // Increase randomness in direction to make asteroids come in at more varied angles
+            // GREATLY increase randomness in direction for more varied approach angles
             const randomDirection = new THREE.Vector3(0, 0, 1);
-            randomDirection.x += (Math.random() - 0.5) * 0.3; // Increased from 0.15 to 0.3
-            randomDirection.y += (Math.random() - 0.5) * 0.3; // Increased from 0.15 to 0.3
+            randomDirection.x += (Math.random() - 0.5) * 0.5; // Increased from 0.3 to 0.5
+            randomDirection.y += (Math.random() - 0.5) * 0.5; // Increased from 0.3 to 0.5
             
-            // Add randomized Z component for more varied approach angles
-            randomDirection.z += (Math.random() - 0.5) * 0.2;
+            // Add larger randomized Z component for more varied approach angles
+            randomDirection.z += (Math.random() - 0.5) * 0.4; // Increased from 0.2 to 0.4
             randomDirection.normalize();
             
             // Blend between random direction and player-targeting direction based on targeting factor
@@ -534,6 +561,291 @@ class GameClient {
             return asteroid;
         } catch (error) {
             console.error('Error spawning asteroid:', error);
+            return null;
+        }
+    }
+
+    // Add this helper method to spawn waves with more spacing
+    spawnAsteroidWave() {
+        if (!this.gameState || !this.gameState.isRunning) return;
+        
+        // Define patterns for asteroid formations that create navigable paths
+        const patterns = [
+            'wall', // Horizontal wall with a gap
+            'tunnel', // Tunnel-like formation with a passage
+            'spiral', // Spiral formation with a clear path
+            'random' // Traditional random pattern
+        ];
+        
+        // Select a pattern for this wave - weighted toward more structured patterns
+        const patternWeights = [0.4, 0.3, 0.2, 0.1]; // 90% structured, 10% random
+        const patternSelector = Math.random();
+        let selectedPattern;
+        
+        let cumulativeWeight = 0;
+        for (let i = 0; i < patterns.length; i++) {
+            cumulativeWeight += patternWeights[i];
+            if (patternSelector <= cumulativeWeight) {
+                selectedPattern = patterns[i];
+                break;
+            }
+        }
+        
+        console.log(`Spawning ${selectedPattern} pattern asteroid wave`);
+        
+        // Get player position for reference
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        const playerMesh = this.playerMeshes.get(playerId);
+        if (!playerMesh) return;
+        
+        // Spawn the selected pattern
+        switch (selectedPattern) {
+            case 'wall':
+                this.spawnWallPattern(playerMesh.position);
+                break;
+                
+            case 'tunnel':
+                this.spawnTunnelPattern(playerMesh.position);
+                break;
+                
+            case 'spiral':
+                this.spawnSpiralPattern(playerMesh.position);
+                break;
+                
+            case 'random':
+            default:
+                // Traditional random wave but with fewer asteroids
+                const numAsteroids = Math.floor(
+                    this.waveConfig.minAsteroidsPerWave + 
+                    Math.random() * (this.waveConfig.maxAsteroidsPerWave - this.waveConfig.minAsteroidsPerWave)
+                );
+                
+                // Spawn asteroids with delays
+                for (let i = 0; i < numAsteroids; i++) {
+                    setTimeout(() => {
+                        this.spawnAsteroid(true);
+                    }, i * 300);
+                }
+                break;
+        }
+    }
+    
+    // New method to spawn a wall pattern with a gap to fly through
+    spawnWallPattern(playerPosition) {
+        // Create a wall of asteroids with a deliberate gap
+        const wallDistance = 350; // Distance from player
+        const wallWidth = 400; // Total width of wall
+        const gapSize = 80; // Size of the gap
+        const gapPosition = (Math.random() - 0.5) * (wallWidth - gapSize); // Random position for gap
+        
+        // Calculate base position for the wall (ahead of player)
+        const wallBasePosition = playerPosition.clone();
+        wallBasePosition.z -= wallDistance;
+        
+        // Number of asteroids to make a decent wall
+        const numAsteroids = 12;
+        const spacing = wallWidth / numAsteroids;
+        
+        // Create the wall with a gap
+        for (let i = 0; i < numAsteroids; i++) {
+            const xPos = (i * spacing) - (wallWidth / 2);
+            
+            // Skip asteroids in the gap area
+            if (xPos > gapPosition && xPos < gapPosition + gapSize) {
+                continue;
+            }
+            
+            setTimeout(() => {
+                this.spawnAsteroidAtPosition(
+                    new THREE.Vector3(
+                        wallBasePosition.x + xPos,
+                        wallBasePosition.y + (Math.random() - 0.5) * 30, // Small Y variation
+                        wallBasePosition.z + (Math.random() - 0.5) * 20  // Small Z variation
+                    )
+                );
+            }, i * 100);
+        }
+    }
+    
+    // New method to spawn a tunnel pattern to fly through
+    spawnTunnelPattern(playerPosition) {
+        // Create two parallel walls forming a tunnel
+        const tunnelDistance = 350; // Starting distance
+        const tunnelLength = 300; // Length of tunnel
+        const tunnelWidth = 100; // Width of navigable space
+        const numSegments = 8; // Number of segments in tunnel
+        
+        // Calculate base position for the tunnel
+        const tunnelBasePosition = playerPosition.clone();
+        tunnelBasePosition.z -= tunnelDistance;
+        
+        // Calculate tunnel center with slight offset from player position
+        const tunnelCenterX = playerPosition.x + (Math.random() - 0.5) * 50;
+        const tunnelCenterY = playerPosition.y + (Math.random() - 0.5) * 50;
+        
+        // Spawn segments of the tunnel
+        for (let segment = 0; segment < numSegments; segment++) {
+            const segmentZ = tunnelBasePosition.z - (segment * (tunnelLength / numSegments));
+            const segmentAngle = (segment / numSegments) * Math.PI * 0.5; // Gradually curve the tunnel
+            
+            // Number of asteroids per segment wall
+            const asteroidsPerSegment = 4;
+            
+            for (let i = 0; i < asteroidsPerSegment; i++) {
+                const angleOffset = (i / asteroidsPerSegment) * Math.PI * 2;
+                
+                // Left wall asteroid
+                setTimeout(() => {
+                    this.spawnAsteroidAtPosition(
+                        new THREE.Vector3(
+                            tunnelCenterX + Math.cos(segmentAngle + angleOffset) * (tunnelWidth + 20),
+                            tunnelCenterY + Math.sin(segmentAngle + angleOffset) * (tunnelWidth + 20),
+                            segmentZ + (Math.random() - 0.5) * 10
+                        )
+                    );
+                }, (segment * asteroidsPerSegment + i) * 80);
+                
+                // Right wall asteroid
+                setTimeout(() => {
+                    this.spawnAsteroidAtPosition(
+                        new THREE.Vector3(
+                            tunnelCenterX - Math.cos(segmentAngle + angleOffset) * (tunnelWidth + 20),
+                            tunnelCenterY - Math.sin(segmentAngle + angleOffset) * (tunnelWidth + 20),
+                            segmentZ + (Math.random() - 0.5) * 10
+                        )
+                    );
+                }, (segment * asteroidsPerSegment + i) * 80 + 40);
+            }
+        }
+    }
+    
+    // New method to spawn a spiral pattern to navigate through
+    spawnSpiralPattern(playerPosition) {
+        // Create a spiral of asteroids with a navigable path
+        const spiralDistance = 350; // Starting distance
+        const spiralRadius = 150; // Initial radius
+        const spiralTurns = 1.5; // Number of turns in the spiral
+        const numAsteroids = 20; // Number of asteroids in spiral
+        
+        // Calculate base position for the spiral
+        const spiralBasePosition = playerPosition.clone();
+        spiralBasePosition.z -= spiralDistance;
+        
+        // Spawn asteroids in a spiral pattern
+        for (let i = 0; i < numAsteroids; i++) {
+            const t = i / numAsteroids;
+            const angle = t * Math.PI * 2 * spiralTurns;
+            const radius = spiralRadius * (1 - t * 0.6); // Spiral gets tighter
+            
+            setTimeout(() => {
+                this.spawnAsteroidAtPosition(
+                    new THREE.Vector3(
+                        spiralBasePosition.x + Math.cos(angle) * radius,
+                        spiralBasePosition.y + Math.sin(angle) * radius,
+                        spiralBasePosition.z - t * 200 // Spiral moves away from player
+                    )
+                );
+            }, i * 100);
+        }
+    }
+    
+    // Helper to spawn asteroid at a specific position
+    spawnAsteroidAtPosition(position) {
+        // Check if we're in a game state where we should spawn asteroids
+        if (!this.gameState || !this.gameState.isRunning) return;
+        
+        try {
+            // Create new asteroid object
+            const asteroid = {
+                mesh: null,
+                velocity: new THREE.Vector3(),
+                rotation: new THREE.Vector3(),
+                size: 0,
+                targeting: false,
+                targetingSpeed: 0,
+                speed: 0,
+                inactive: false
+            };
+            
+            // Randomize asteroid size but keep them small
+            asteroid.size = 0.2 + Math.random() * 0.4;
+            
+            // Use a random asteroid model
+            if (this.models && this.models.asteroids && this.models.asteroids.length > 0) {
+                const randomIndex = Math.floor(Math.random() * this.models.asteroids.length);
+                const randomModel = this.models.asteroids[randomIndex];
+                asteroid.mesh = randomModel.clone();
+            } else {
+                // Fallback to basic mesh
+                const fallbackGeometry = new THREE.SphereGeometry(1, 8, 8);
+                const fallbackMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x888888,
+                    wireframe: Math.random() > 0.5
+                });
+                asteroid.mesh = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
+            }
+            
+            // Scale the asteroid to be small
+            asteroid.mesh.scale.set(asteroid.size * 0.15, asteroid.size * 0.15, asteroid.size * 0.15);
+            
+            // Set position directly
+            asteroid.mesh.position.copy(position);
+            asteroid.mesh.visible = true;
+            this.scene.add(asteroid.mesh);
+            
+            // Initialize asteroid properties
+            asteroid.active = true;
+            asteroid.creationTime = Date.now();
+            
+            // Almost no targeting for pattern asteroids
+            asteroid.targetingFactor = 0.05;
+            
+            // Minimal velocity - just enough to approach player
+            const difficultySpeedMultiplier = 1 + (this.difficultyLevel - 1) * 0.1;
+            const baseSpeed = 0.3 * difficultySpeedMultiplier;
+            
+            // Direction mostly based on player position but with small random component
+            const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+            const playerMesh = this.playerMeshes.get(playerId);
+            
+            if (playerMesh) {
+                const playerDirection = new THREE.Vector3().subVectors(
+                    playerMesh.position, 
+                    position
+                ).normalize();
+                
+                // Add slight randomness
+                const randomDirection = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1,
+                    1
+                ).normalize();
+                
+                // Blend directions - mostly towards player to maintain pattern
+                const direction = new THREE.Vector3()
+                    .addScaledVector(randomDirection, 0.1)
+                    .addScaledVector(playerDirection, 0.9)
+                    .normalize();
+                
+                asteroid.velocity.copy(direction.multiplyScalar(baseSpeed));
+            } else {
+                // Fallback if no player mesh
+                asteroid.velocity.set(0, 0, baseSpeed);
+            }
+            
+            // Set random rotation
+            asteroid.mesh.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            
+            // Add to collection
+            this.asteroids.push(asteroid);
+            
+            return asteroid;
+        } catch (error) {
+            console.error('Error spawning positioned asteroid:', error);
             return null;
         }
     }
@@ -1073,11 +1385,12 @@ class GameClient {
     }
 
     createDynamicStarfield() {
-        const starCount = 15000; // Increased from 10000 for better coverage
-        const starSpread = 2500; // Increased from 2000 for better distribution
+        const starCount = 20000; // Increased from 15000 for better coverage
+        const starSpread = 3000; // Increased from 2500 for better distribution
         const starGeometry = new THREE.BufferGeometry();
         const starPositions = new Float32Array(starCount * 3);
         const starSpeeds = new Float32Array(starCount);
+        const starSizes = new Float32Array(starCount);
         
         for (let i = 0; i < starCount; i++) {
             const i3 = i * 3;
@@ -1085,64 +1398,146 @@ class GameClient {
             starPositions[i3 + 1] = THREE.MathUtils.randFloatSpread(starSpread);
             starPositions[i3 + 2] = THREE.MathUtils.randFloatSpread(starSpread);
             starSpeeds[i] = Math.random() * 1.2 + 0.3; // More consistent speed range
+            starSizes[i] = Math.random() * 2 + 1; // Varied star sizes
         }
         
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        
+        // Add size attribute for varied star sizes
+        const sizeAttribute = new THREE.BufferAttribute(starSizes, 1);
+        starGeometry.setAttribute('size', sizeAttribute);
         
         const starMaterial = new THREE.PointsMaterial({
             color: 0xffffff,
             size: 2,
             sizeAttenuation: true,
             transparent: true,
-            opacity: 0.8 // Slightly transparent for better depth effect
+            opacity: 0.8, // Slightly transparent for better depth effect
+            vertexColors: false,
+            // Use the size attribute for individual star sizes
+            vertexSizeAttribute: true
         });
         
         this.starfield = new THREE.Points(starGeometry, starMaterial);
         this.starfield.speeds = starSpeeds;
+        this.starfield.lastPlayerPosition = new THREE.Vector3();
         this.scene.add(this.starfield);
+        
+        // Store the original player position when we create the starfield
+        // This will be our reference point for resetting stars
+        this.startPlayerPosition = null;
+        this.starfieldResetDistance = 1000; // Distance to reset starfield
     }
     
     updateStarfield() {
         if (!this.starfield || !this.localPlayer) return;
-
-            const positions = this.starfield.geometry.attributes.position.array;
+        
+        const positions = this.starfield.geometry.attributes.position.array;
         const speeds = this.starfield.speeds;
         
-        const playerId = this.network ? this.network.playerId : null;
-        const playerMesh = playerId ? this.playerMeshes.get(playerId) : null;
+        // Get player mesh - works in both single player and multiplayer modes
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        const playerMesh = this.playerMeshes.get(playerId);
         
         if (!playerMesh) return;
-
+        
+        // Initialize starting position if not set
+        if (!this.startPlayerPosition) {
+            this.startPlayerPosition = playerMesh.position.clone();
+        }
+        
+        // Calculate how far the player has moved since the last frame
+        const playerMovement = new THREE.Vector3();
+        if (this.starfield.lastPlayerPosition.x !== 0 || 
+            this.starfield.lastPlayerPosition.y !== 0 || 
+            this.starfield.lastPlayerPosition.z !== 0) {
+            playerMovement.subVectors(playerMesh.position, this.starfield.lastPlayerPosition);
+        }
+        
+        // Store current position for next frame
+        this.starfield.lastPlayerPosition.copy(playerMesh.position);
+        
+        // Check if player has moved far enough to reset the entire starfield
+        const distanceFromStart = playerMesh.position.distanceTo(this.startPlayerPosition);
+        if (distanceFromStart > this.starfieldResetDistance) {
+            // Reset reference point - slide the reference point forward to prevent numerical issues
+            this.startPlayerPosition.copy(playerMesh.position);
+            
+            // Reset all stars relative to new player position
+            this.resetEntireStarfield(playerMesh.position);
+            return;
+        }
+        
         const forwardDirection = new THREE.Vector3(0, 0, -1);
         forwardDirection.applyQuaternion(playerMesh.quaternion);
 
         // Update star positions with optimized loop
         for (let i = 0; i < positions.length; i += 3) {
-            // Update positions based on player movement
+            // Move stars slightly with player movement to create parallax
+            positions[i] -= playerMovement.x * 0.1;
+            positions[i + 1] -= playerMovement.y * 0.1;
+            positions[i + 2] -= playerMovement.z * 0.1;
+            
+            // Additional movement based on forward direction
             positions[i] -= forwardDirection.x * speeds[i / 3];
             positions[i + 1] -= forwardDirection.y * speeds[i / 3];
             positions[i + 2] -= forwardDirection.z * speeds[i / 3];
 
-            // Reset stars that are too far behind the player
-            const distanceBehind = positions[i + 2] - playerMesh.position.z;
-            if (distanceBehind > 1000 || distanceBehind < -2000) {
-                // Reset star to a position ahead of the player
-                positions[i] = playerMesh.position.x + THREE.MathUtils.randFloatSpread(2000);
-                positions[i + 1] = playerMesh.position.y + THREE.MathUtils.randFloatSpread(2000);
-                positions[i + 2] = playerMesh.position.z - 2000 - Math.random() * 500;
-            }
-
-            // Reset stars that are too far to the sides
-            const lateralDistance = Math.sqrt(
-                Math.pow(positions[i] - playerMesh.position.x, 2) +
-                Math.pow(positions[i + 1] - playerMesh.position.y, 2)
-            );
-            if (lateralDistance > 1500) {
-                positions[i] = playerMesh.position.x + THREE.MathUtils.randFloatSpread(1000);
-                positions[i + 1] = playerMesh.position.y + THREE.MathUtils.randFloatSpread(1000);
+            // Get star position relative to player
+            const starX = positions[i] - playerMesh.position.x;
+            const starY = positions[i + 1] - playerMesh.position.y;
+            const starZ = positions[i + 2] - playerMesh.position.z;
+            
+            // Calculate distance from player
+            const distanceFromPlayer = Math.sqrt(starX * starX + starY * starY + starZ * starZ);
+            
+            // Reset stars that are too far from player in any direction
+            if (distanceFromPlayer > 1500) {
+                // Determine which side of the player to place the star (front is more likely)
+                const placeInFront = Math.random() > 0.3;
+                const distance = 800 + Math.random() * 400;
+                
+                // Create a random direction vector
+                const randomDir = new THREE.Vector3(
+                    THREE.MathUtils.randFloatSpread(2), 
+                    THREE.MathUtils.randFloatSpread(2),
+                    placeInFront ? -1 : 1
+                ).normalize();
+                
+                // Position the star in that direction
+                positions[i] = playerMesh.position.x + randomDir.x * distance;
+                positions[i + 1] = playerMesh.position.y + randomDir.y * distance;
+                positions[i + 2] = playerMesh.position.z + randomDir.z * distance;
             }
         }
 
+        this.starfield.geometry.attributes.position.needsUpdate = true;
+    }
+    
+    // Add new method to reset the entire starfield relative to player position
+    resetEntireStarfield(playerPosition) {
+        console.log("Resetting entire starfield");
+        const positions = this.starfield.geometry.attributes.position.array;
+        
+        for (let i = 0; i < positions.length; i += 3) {
+            // Create a sphere of stars around the player with higher density in the front
+            const theta = Math.random() * Math.PI * 2; // Random angle around y-axis
+            const phi = Math.acos(2 * Math.random() - 1); // Random angle from y-axis
+            const radius = 300 + Math.random() * 1200;  // Random radius
+            
+            // Convert spherical coordinates to Cartesian
+            positions[i] = playerPosition.x + radius * Math.sin(phi) * Math.cos(theta);
+            positions[i + 1] = playerPosition.y + radius * Math.sin(phi) * Math.sin(theta);
+            
+            // Bias stars to be more in front of the player than behind
+            const inFront = Math.random() > 0.3;
+            if (inFront) {
+                positions[i + 2] = playerPosition.z - (radius * Math.cos(phi)); // In front
+            } else {
+                positions[i + 2] = playerPosition.z + (radius * Math.cos(phi)); // Behind
+            }
+        }
+        
         this.starfield.geometry.attributes.position.needsUpdate = true;
     }
 
@@ -2455,43 +2850,166 @@ class GameClient {
     // New method to handle speed increases based on distance traveled
     updateSpeedBasedOnDistance() {
         // Get distance traveled - ensure it's defined
-        const distance = this.distanceTraveled || 0;
+        const distance = this.localPlayer?.distanceTraveled || 0;
         
-        // Calculate new speed level (increase every 500 units)
-        const newSpeedLevel = Math.floor(distance / 500);
+        // Check if we need to initialize the tracking variables
+        if (!this.lastSpeedIncreaseDistance) {
+            this.lastSpeedIncreaseDistance = 0;
+            
+            // Store original base speed if not already set
+            if (!this.originalBaseSpeed) {
+                this.originalBaseSpeed = this.controls.baseSpeed;
+            }
+        }
         
-        // Check if speed level has increased
-        if (newSpeedLevel > this.currentSpeedLevel) {
-            const oldLevel = this.currentSpeedLevel;
-            this.currentSpeedLevel = newSpeedLevel;
+        // Calculate milestone reached
+        const distanceMilestone = 500; // Increase speed every 500 units
+        const currentMilestone = Math.floor(distance / distanceMilestone);
+        const previousMilestone = Math.floor(this.lastSpeedIncreaseDistance / distanceMilestone);
+        
+        // Check if we've crossed a new milestone
+        if (currentMilestone > previousMilestone) {
+            // Update last increase distance
+            this.lastSpeedIncreaseDistance = currentMilestone * distanceMilestone;
             
-            // Calculate new speed with 10% increase per level (1.1^level)
-            const speedMultiplier = Math.pow(1.1, this.currentSpeedLevel);
-            this.controls.baseSpeed = this.originalBaseSpeed * speedMultiplier;
+            // Calculate new level based on milestones passed
+            const newLevel = currentMilestone + 1;  // Level 1 starts at 0 distance
             
-            console.log(`SPEED INCREASED: Level ${oldLevel} -> ${this.currentSpeedLevel}`);
-            console.log(`New base speed: ${this.controls.baseSpeed.toFixed(2)} (${speedMultiplier.toFixed(2)}x multiplier)`);
-            
-            // Show notification to player
-            const increasePercent = Math.round((speedMultiplier - 1) * 100);
-            this.showSpeedUpNotification(increasePercent);
-            
-            // Play a sound for the speed increase
-            const speedUpSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU');
-            speedUpSound.volume = 0.3;
-            speedUpSound.play().catch(e => console.log('Audio play failed:', e));
+            // Apply a fixed speed increase of 10 units
+            this.increaseSpeedFixed(newLevel, 10);
+        }
+    }
+    
+    // New method for fixed speed increases
+    increaseSpeedFixed(newLevel, speedIncrease) {
+        const oldLevel = this.currentSpeedLevel || 0;
+        this.currentSpeedLevel = newLevel;
+        
+        // Store original base speed if not stored yet
+        if (!this.originalBaseSpeed) {
+            this.originalBaseSpeed = this.controls.baseSpeed;
+        }
+        
+        // Calculate new speed by adding fixed amount
+        // Convert from display units (km/h) to internal units
+        const speedIncreaseInternal = speedIncrease / 100;
+        
+        // Set the new speed - directly add the fixed increase
+        this.controls.baseSpeed += speedIncreaseInternal;
+        
+        // Log the speed change
+        console.log(`SPEED INCREASED: Level ${oldLevel} → ${newLevel}`);
+        console.log(`New base speed: ${this.controls.baseSpeed.toFixed(2)} (+${speedIncreaseInternal.toFixed(2)} units)`);
+        console.log(`Distance traveled: ${Math.round(this.localPlayer?.distanceTraveled || 0)} units`);
+        
+        // Show notification to player
+        this.showSpeedUpNotification(speedIncrease);
+        
+        // Also increase difficulty every 2 speed levels
+        if (newLevel % 2 === 0 && this.difficultyLevel < 10) {
+            this.difficultyLevel++;
+            this.showDifficultyNotification(this.difficultyLevel);
         }
     }
 
-    // New method to update distance based on time and speed
+    // Fix starfield to ensure it's always visible up to at least 3000 distance
+    updateStarfield() {
+        if (!this.starfield || !this.localPlayer) return;
+        
+        const positions = this.starfield.geometry.attributes.position.array;
+        const speeds = this.starfield.speeds;
+        
+        // Get player mesh - works in both single player and multiplayer modes
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        const playerMesh = this.playerMeshes.get(playerId);
+        
+        if (!playerMesh) return;
+        
+        // Initialize starting position if not set
+        if (!this.startPlayerPosition) {
+            this.startPlayerPosition = playerMesh.position.clone();
+        }
+        
+        // Calculate how far the player has moved since the last frame
+        const playerMovement = new THREE.Vector3();
+        if (this.starfield.lastPlayerPosition.x !== 0 || 
+            this.starfield.lastPlayerPosition.y !== 0 || 
+            this.starfield.lastPlayerPosition.z !== 0) {
+            playerMovement.subVectors(playerMesh.position, this.starfield.lastPlayerPosition);
+        }
+        
+        // Store current position for next frame
+        this.starfield.lastPlayerPosition.copy(playerMesh.position);
+        
+        // Check if player has moved far enough to reset the entire starfield
+        const distanceFromStart = playerMesh.position.distanceTo(this.startPlayerPosition);
+        
+        // If player has moved a significant distance, reset the starfield reference point
+        // Lower the reset threshold to prevent stars disappearing at 3000 units
+        if (distanceFromStart > 1500) {
+            console.log("Resetting starfield reference (moved far from start)");
+            this.startPlayerPosition.copy(playerMesh.position);
+            this.resetEntireStarfield(playerMesh.position);
+            return;
+        }
+        
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        forwardDirection.applyQuaternion(playerMesh.quaternion);
+
+        // Update star positions with optimized loop
+        for (let i = 0; i < positions.length; i += 3) {
+            // Move stars slightly with player movement to create parallax
+            positions[i] -= playerMovement.x * 0.1;
+            positions[i + 1] -= playerMovement.y * 0.1;
+            positions[i + 2] -= playerMovement.z * 0.1;
+            
+            // Additional movement based on forward direction
+            positions[i] -= forwardDirection.x * speeds[i / 3];
+            positions[i + 1] -= forwardDirection.y * speeds[i / 3];
+            positions[i + 2] -= forwardDirection.z * speeds[i / 3];
+
+            // Get star position relative to player
+            const starX = positions[i] - playerMesh.position.x;
+            const starY = positions[i + 1] - playerMesh.position.y;
+            const starZ = positions[i + 2] - playerMesh.position.z;
+            
+            // Calculate distance from player
+            const distanceFromPlayer = Math.sqrt(starX * starX + starY * starY + starZ * starZ);
+            
+            // Reset stars that are too far from player in any direction
+            // Recycle stars earlier to prevent them from disappearing
+            if (distanceFromPlayer > 1000) {
+                // Determine which side of the player to place the star (front is more likely)
+                const placeInFront = Math.random() > 0.2; // Increased front bias
+                const distance = 500 + Math.random() * 200; // Closer distance
+                
+                // Create a random direction vector
+                const randomDir = new THREE.Vector3(
+                    THREE.MathUtils.randFloatSpread(2), 
+                    THREE.MathUtils.randFloatSpread(2),
+                    placeInFront ? -1 : 1
+                ).normalize();
+                
+                // Position the star in that direction
+                positions[i] = playerMesh.position.x + randomDir.x * distance;
+                positions[i + 1] = playerMesh.position.y + randomDir.y * distance;
+                positions[i + 2] = playerMesh.position.z + randomDir.z * distance;
+            }
+        }
+
+        this.starfield.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // Add back the updateDistanceBasedOnTime method that's called in the animate loop
     updateDistanceBasedOnTime() {
         // Skip if game isn't running
         if (!this.gameState || !this.gameState.isRunning) return;
         
+        // Get current time
         const now = Date.now();
         
         // Initialize game start time if needed
-        if (this.gameStartTime === 0) {
+        if (!this.gameStartTime) {
             this.gameStartTime = now;
             this.lastDistanceUpdateTime = now;
             return;
@@ -2500,53 +3018,32 @@ class GameClient {
         // Calculate time elapsed since last update (in seconds)
         const elapsed = (now - this.lastDistanceUpdateTime) / 1000;
         
+        // Skip if elapsed time is too small (optimization)
+        if (elapsed < 0.016) return; // Skip if less than ~60fps frame time
+        
         // Use current speed to calculate distance traveled during this interval
         // Multiply by 60 to make distance match roughly what position-based distance would be
         const distanceIncrement = this.controls.currentSpeed * elapsed * 60;
         
-        // Add to total distance
-        this.distanceTraveled += distanceIncrement;
-        
-        // Store distance in local player object for compatibility with other code
-        if (this.localPlayer) {
-            this.localPlayer.distanceTraveled = this.distanceTraveled;
+        // Initialize distance if needed
+        if (!this.localPlayer.distanceTraveled) {
+            this.localPlayer.distanceTraveled = 0;
         }
         
-        // Check for speed increases every 500 units
-        if (this.distanceTraveled >= this.nextSpeedIncreaseAt) {
-            // Calculate new speed level
-            const newSpeedLevel = Math.floor(this.distanceTraveled / 500);
-            
-            if (newSpeedLevel > this.currentSpeedLevel) {
-                this.increaseSpeed(newSpeedLevel);
-            }
-            
-            // Set next threshold
-            this.nextSpeedIncreaseAt = (newSpeedLevel + 1) * 500;
-        }
+        // Add to total distance in local player object
+        this.localPlayer.distanceTraveled += distanceIncrement;
+        
+        // Check for speed increases (using our new system)
+        this.updateSpeedBasedOnDistance();
         
         // Update last update time
         this.lastDistanceUpdateTime = now;
-    }
-    
-    // Method to handle speed increases
-    increaseSpeed(newLevel) {
-        const oldLevel = this.currentSpeedLevel;
-        this.currentSpeedLevel = newLevel;
         
-        // Calculate speed multiplier (10% increase per level)
-        const speedMultiplier = Math.pow(1.1, this.currentSpeedLevel);
-        
-        // Apply to base speed
-        this.controls.baseSpeed = this.originalBaseSpeed * speedMultiplier;
-        
-        console.log(`SPEED INCREASED: Level ${oldLevel} → ${newLevel} (${speedMultiplier.toFixed(2)}x multiplier)`);
-        console.log(`New base speed: ${this.controls.baseSpeed.toFixed(2)}`);
-        console.log(`Distance traveled: ${Math.round(this.distanceTraveled)} units`);
-        
-        // Show notification to player
-        const increasePercent = Math.round((speedMultiplier - 1) * 100);
-        this.showSpeedUpNotification(increasePercent);
+        // Update distance display if it exists
+        const distanceDisplay = document.getElementById('distance-display');
+        if (distanceDisplay) {
+            distanceDisplay.textContent = `Distance: ${Math.round(this.localPlayer.distanceTraveled)} units`;
+        }
     }
 }
 

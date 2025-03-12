@@ -6,6 +6,7 @@ const path = require('path');
 const compression = require('compression');
 const net = require('net');
 const fs = require('fs');
+const { exec } = require('child_process');
 
 const app = express();
 
@@ -47,6 +48,75 @@ const createFaviconIfNeeded = () => {
 
 // Create favicon to prevent 404 errors
 createFaviconIfNeeded();
+
+// Function to kill previously running game server processes
+function killPreviousServerProcesses() {
+  return new Promise((resolve) => {
+    // Skip process detection if environment variable is set
+    if (process.env.SKIP_PROCESS_CHECK === 'true') {
+      console.log('Process check skipped via environment variable.');
+      resolve();
+      return;
+    }
+    
+    console.log('Checking for previous game server processes...');
+    
+    // Determine the correct command for the current platform
+    let command;
+    if (process.platform === 'win32') {
+      // For Windows, use PowerShell to find Node processes serving our game
+      // Look for processes with "server.js" in the command line
+      command = 'powershell -Command "Get-WmiObject Win32_Process -Filter \\"name = \'node.exe\'\\" | Where-Object { $_.CommandLine -like \'*server.js*\' } | ForEach-Object { $_.ProcessId }"';
+    } else {
+      // For Unix-like systems (Linux, macOS)
+      command = "ps -ef | grep 'node.*server\\.js' | grep -v grep | awk '{print $2}'";
+    }
+    
+    exec(command, (error, stdout, stderr) => {
+      if (error && error.code !== 1) {
+        console.error('Error finding processes:', error);
+        resolve(); // Continue even if there's an error
+        return;
+      }
+      
+      const pids = stdout.trim().split('\n').filter(Boolean);
+      
+      if (pids.length === 0) {
+        console.log('No previous game server processes found.');
+        resolve();
+        return;
+      }
+      
+      console.log(`Found ${pids.length} game server processes running: ${pids.join(', ')}`);
+      
+      // Kill each process
+      let killedCount = 0;
+      pids.forEach(pid => {
+        if (!pid) return;
+        
+        const killCommand = process.platform === 'win32' 
+          ? `taskkill /F /PID ${pid}` 
+          : `kill -9 ${pid}`;
+        
+        exec(killCommand, (killError) => {
+          if (killError) {
+            console.error(`Failed to kill process ${pid}:`, killError);
+          } else {
+            console.log(`Successfully terminated process ${pid}`);
+            killedCount++;
+          }
+          
+          // If we've processed all PIDs, resolve the promise
+          if (killedCount === pids.length) {
+            console.log('All previous server processes terminated.');
+            // Add a small delay to ensure ports are released
+            setTimeout(resolve, 500);
+          }
+        });
+      });
+    });
+  });
+}
 
 // Create an HTTP server
 const server = http.createServer(app);
@@ -204,6 +274,9 @@ function isPortInUse(port) {
 
 // Start server on an available port
 async function startServer(initialPort = 3000) {
+  // First, kill any previous server processes
+  await killPreviousServerProcesses();
+  
   let port = initialPort;
   let attempts = 0;
   const maxAttempts = 10;
