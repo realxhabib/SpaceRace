@@ -368,10 +368,10 @@ class GameClient {
                     this.sharedMaterials[matIndex]
                 );
                 
-                const baseScale = 0.015 + Math.random() * 0.025;
+            const baseScale = 0.015 + Math.random() * 0.025;
                 const sizeMultiplier = 1.1 + Math.random() * 0.1;
-                const scale = baseScale * sizeMultiplier;
-                
+            const scale = baseScale * sizeMultiplier;
+            
                 mesh.scale.set(scale, scale, scale);
                 mesh.visible = false;
                 this.scene.add(mesh);
@@ -405,16 +405,16 @@ class GameClient {
                 const scale = baseScale * sizeMultiplier;
                 
                 asteroidModel.scale.set(scale, scale, scale);
-                asteroidModel.visible = false;
-                this.scene.add(asteroidModel);
-                
+            asteroidModel.visible = false;
+            this.scene.add(asteroidModel);
+            
                 const asteroid = {
-                    mesh: asteroidModel,
-                    active: false,
-                    velocity: new THREE.Vector3(),
-                    rotationSpeed: new THREE.Vector3(
-                        Math.random() * 0.005 - 0.0025,
-                        Math.random() * 0.005 - 0.0025,
+                mesh: asteroidModel,
+                active: false,
+                velocity: new THREE.Vector3(),
+                rotationSpeed: new THREE.Vector3(
+                    Math.random() * 0.005 - 0.0025,
+                    Math.random() * 0.005 - 0.0025,
                         Math.random() * 0.005 - 0.0025
                     ),
                     size: scale * 10,
@@ -1626,8 +1626,8 @@ class GameClient {
         }
 
         // Apply lateral movement directly without boundary checking
-        playerMesh.position.x += moveX;
-        playerMesh.position.y += moveY;
+            playerMesh.position.x += moveX;
+            playerMesh.position.y += moveY;
         
         // Apply rotation with smooth transitions
         playerMesh.rotation.x = THREE.MathUtils.lerp(playerMesh.rotation.x, rotX, 0.05);
@@ -1798,50 +1798,47 @@ class GameClient {
         });
     }
 
-    // Create a dual-layer starfield system with static background and dynamic foreground
+    // Completely revised starfield creation method
     createDynamicStarfield() {
-        // 1. Create the static background starfield (far away, doesn't move relative to player)
-        const backgroundStarCount = 15000; // REDUCED from 30,000 to 15,000
+        console.log("Creating improved starfield system");
+        
+        // Clear any existing starfields
+        if (this.starfield) {
+            this.scene.remove(this.starfield);
+        }
+        if (this.backgroundStarfieldContainer) {
+            this.scene.remove(this.backgroundStarfieldContainer);
+        }
+        
+        // Create background stars fixed to the camera
+        const backgroundStarCount = 6000;
         const backgroundGeometry = new THREE.BufferGeometry();
         const backgroundPositions = new Float32Array(backgroundStarCount * 3);
         const backgroundSizes = new Float32Array(backgroundStarCount);
         const backgroundColors = new Float32Array(backgroundStarCount * 3);
         
-        // Generate background stars in a full sphere around the camera
+        // Create stars in a sphere around the camera
         for (let i = 0; i < backgroundStarCount; i++) {
             const i3 = i * 3;
-            // Generate positions on a sphere
-            const phi = Math.acos(2 * Math.random() - 1); // Range [0, PI]
-            const theta = 2 * Math.PI * Math.random(); // Range [0, 2PI]
-            const radius = 3000; // Fixed large distance
             
-            // Convert spherical to Cartesian coordinates
+            // Use spherical coordinates for even distribution
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const radius = 2000;
+            
+            // Convert to Cartesian coordinates
             backgroundPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
             backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
             backgroundPositions[i3 + 2] = radius * Math.cos(phi);
             
-            // SMALLER stars for background
-            backgroundSizes[i] = Math.random() * 1.2 + 0.5; // Reduced from 1.8+0.7
+            // Random star sizes - small for background
+            backgroundSizes[i] = Math.random() * 1.0 + 0.5;
             
-            // Add color variation to make it more realistic
-            const colorChoice = Math.random();
-            if (colorChoice > 0.992) {
-                // Reddish stars (rare)
-                backgroundColors[i3] = 1.0;
-                backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 2] = 0.5 + Math.random() * 0.3;
-            } else if (colorChoice > 0.98) {
-                // Bluish stars (uncommon)
-                backgroundColors[i3] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 2] = 1.0;
-            } else {
-                // White/yellowish stars (common)
-                const brightness = 0.85 + Math.random() * 0.15;
-                backgroundColors[i3] = brightness;
-                backgroundColors[i3 + 1] = brightness;
-                backgroundColors[i3 + 2] = brightness * (0.92 + Math.random() * 0.08);
-            }
+            // Simple white/blue stars
+            const brightness = 0.8 + Math.random() * 0.2;
+            backgroundColors[i3] = brightness;
+            backgroundColors[i3 + 1] = brightness;
+            backgroundColors[i3 + 2] = brightness;
         }
         
         backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(backgroundPositions, 3));
@@ -1849,919 +1846,405 @@ class GameClient {
         backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
         
         const backgroundMaterial = new THREE.PointsMaterial({
-            size: 2.0, // Reduced from 2.5
+            size: 1.5,
             sizeAttenuation: false,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.8,
             vertexColors: true,
-            vertexSizeAttribute: true
+            depthTest: false // Stars always visible
         });
         
         this.backgroundStarfield = new THREE.Points(backgroundGeometry, backgroundMaterial);
-        this.backgroundStarfield.renderOrder = -1; // Render first
         
-        // Create a parent object to handle the background starfield
+        // Create container to allow positioning with camera
         this.backgroundStarfieldContainer = new THREE.Object3D();
         this.backgroundStarfieldContainer.add(this.backgroundStarfield);
         this.scene.add(this.backgroundStarfieldContainer);
         
-        // Store the camera's initial quaternion
-        this.initialCameraQuaternion = this.camera.quaternion.clone();
-        
-        // 2. Create the foreground dynamic starfield with FEWER stars
-        const dynamicStarCount = 2000; // REDUCED from 4,000 to 2,000
+        // Create the foreground dynamic stars
+        const dynamicStarCount = 5000;
         const starGeometry = new THREE.BufferGeometry();
         const starPositions = new Float32Array(dynamicStarCount * 3);
-        const starSpeeds = new Float32Array(dynamicStarCount);
         const starSizes = new Float32Array(dynamicStarCount);
-        const starLayerValues = new Float32Array(dynamicStarCount);
         const starColors = new Float32Array(dynamicStarCount * 3);
         
-        // Store the last recycling times for each star
-        this.lastStarRecyclingTimes = new Float32Array(dynamicStarCount);
-        const now = Date.now();
-        
+        // Create stars with initial positions
         for (let i = 0; i < dynamicStarCount; i++) {
             const i3 = i * 3;
             
-            // IMPROVED: More focused positioning in front of player
-            // Distribute stars in a cone in front of the player rather than uniformly
-            const coneAngle = Math.PI / 3; // 60 degrees
-            const randomAngle = (Math.random() * coneAngle * 2) - coneAngle;
-            const randomElevation = (Math.random() * coneAngle) - (coneAngle/2);
+            // Random positions in a sphere
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const radius = 300 + Math.random() * 700;
             
-            // Random distance within 2000 units, biased toward closer stars
-            const distance = Math.pow(Math.random(), 0.7) * 2000;
+            starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+            starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            starPositions[i3 + 2] = radius * Math.cos(phi);
             
-            // Basic forward vector
-            let vx = 0, vy = 0, vz = -1;
+            // Random sizes - slightly larger for foreground
+            starSizes[i] = Math.random() * 2.0 + 0.7;
             
-            // Apply random rotation around Y axis (horizontal spread)
-            const cosAngle = Math.cos(randomAngle);
-            const sinAngle = Math.sin(randomAngle);
-            const newX = vx * cosAngle - vz * sinAngle;
-            const newZ = vx * sinAngle + vz * cosAngle;
-            vx = newX;
-            vz = newZ;
-            
-            // Apply random rotation around X axis (vertical spread)
-            const cosElev = Math.cos(randomElevation);
-            const sinElev = Math.sin(randomElevation);
-            const newY = vy * cosElev - vz * sinElev;
-            const newZ2 = vy * sinElev + vz * cosElev;
-            vy = newY;
-            vz = newZ2;
-            
-            // Calculate position in the forward cone
-            starPositions[i3] = vx * distance;
-            starPositions[i3 + 1] = vy * distance;
-            starPositions[i3 + 2] = vz * distance;
-            
-            // Initialize recycling time to now with some randomization
-            this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
-            
-            // Speed and layer settings - SMALLER stars
-            starSpeeds[i] = Math.random() * 1.5 + 0.8; // Reduced from 2.0+1.0
-            starSizes[i] = Math.random() * 2.0 + 1.0; // Reduced from 3.0+1.5
-            
-            // Layer distribution - bias toward closer layers for better visuals
-            const layerRandom = Math.random();
-            if (layerRandom < 0.4) {
-                starLayerValues[i] = 2; // Close layer (40%)
-            } else if (layerRandom < 0.7) {
-                starLayerValues[i] = 1; // Mid layer (30%)
-            } else {
-                starLayerValues[i] = 0; // Far layer (30%)
-            }
-            
-            // Add color variation to foreground stars
-            const colorChoice = Math.random();
-            if (colorChoice > 0.97) {
-                // Reddish stars
-                starColors[i3] = 1.0;
-                starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 2] = 0.6 + Math.random() * 0.2;
-            } else if (colorChoice > 0.94) {
-                // Bluish stars 
-                starColors[i3] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 2] = 1.0;
-            } else {
-                // White/yellowish stars
-                const brightness = 0.9 + Math.random() * 0.1;
-                starColors[i3] = brightness;
-                starColors[i3 + 1] = brightness;
-                starColors[i3 + 2] = brightness * (0.95 + Math.random() * 0.05);
-            }
+            // Simple white/blue stars
+            const brightness = 0.8 + Math.random() * 0.2;
+            starColors[i3] = brightness;
+            starColors[i3 + 1] = brightness;
+            starColors[i3 + 2] = brightness;
         }
         
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-        starGeometry.setAttribute('layerValue', new THREE.BufferAttribute(starLayerValues, 1));
         starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
         
         const starMaterial = new THREE.PointsMaterial({
-            size: 2.0, // Reduced from 3.0
+            size: 1.8,
             sizeAttenuation: true,
             transparent: true,
             opacity: 1.0,
             vertexColors: true,
-            vertexSizeAttribute: true
+            depthTest: false // Stars always visible
         });
         
         this.starfield = new THREE.Points(starGeometry, starMaterial);
-        this.starfield.speeds = starSpeeds;
-        this.starfield.layerValues = starLayerValues;
-        this.starfield.lastPlayerPosition = new THREE.Vector3();
-        this.starfield.renderOrder = 0;
         this.scene.add(this.starfield);
         
-        // Store the original player position when we create the starfield
+        // Add necessary tracking properties to starfield
+        this.starfield.lastPlayerPosition = new THREE.Vector3(0, 0, 0);
+        this.starfield.speeds = new Float32Array(dynamicStarCount);
+        for (let i = 0; i < dynamicStarCount; i++) {
+            this.starfield.speeds[i] = Math.random() * 2 + 0.5;
+        }
+        
+        // Track reset timing
+        this.lastStarResetTime = Date.now();
+        this.lastResetDistance = 0;
         this.startPlayerPosition = null;
-        this.starfieldResetDistance = 5000; // Increased from 1200 for long-distance travel
-        this.lastFullStarfieldReset = 0;
-        this.lastStarfieldMaxDistance = 5000; // Track max distance for resets
         
-        console.log("Optimized starfield created with fewer, smaller stars");
+        console.log("Improved starfield created with", dynamicStarCount, "dynamic stars and", backgroundStarCount, "background stars");
     }
 
-    // Update the starfield system with improved visibility
-    updateStarfield() {
-        // Always run this method regardless of game state
-        try {
-            // SAFETY CHECKS - Recreate missing components
-            if (!this.starfield) {
-                console.error("Starfield is missing - recreating");
-                this.recreateDynamicStarfield();
-                return;
-            }
-            
-            if (!this.localPlayer) {
-                console.warn("Local player not initialized, can't update starfield");
-                return;
-            }
-            
-            if (!this.backgroundStarfieldContainer || !this.backgroundStarfield) {
-                console.warn("Background starfield elements missing - recreating");
-                this.recreateBackgroundStarfield();
-                
-                // Exit early if recreation fails
-                if (!this.backgroundStarfieldContainer || !this.backgroundStarfield) {
-                    console.error("Failed to recreate background starfield");
-                    return;
-                }
-            }
-            
-            // CRITICAL: Force visibility on all starfield components
-            if (this.backgroundStarfield) this.backgroundStarfield.visible = true;
-            if (this.starfield) this.starfield.visible = true;
-            
-            // 1. KEEP BACKGROUND STARS ALWAYS ATTACHED TO CAMERA
-            if (this.camera) {
-                this.backgroundStarfieldContainer.position.copy(this.camera.position);
-                
-                // Apply very subtle rotation for parallax effect
-                const cameraDirection = new THREE.Vector3(0, 0, -1);
-                cameraDirection.applyQuaternion(this.camera.quaternion);
-                
-                this.backgroundStarfield.rotation.x += cameraDirection.y * 0.00005;
-                this.backgroundStarfield.rotation.y += cameraDirection.x * 0.00005;
-            }
-            
-            // 2. HANDLE FOREGROUND STARS WITH IMPROVED RELIABILITY
-            // Double check all necessary components exist
-            if (!this.starfield.geometry || !this.starfield.geometry.attributes || 
-                !this.starfield.geometry.attributes.position || !this.starfield.speeds || !this.starfield.layerValues) {
-                console.error("Critical starfield components missing - recreating dynamic starfield");
-                this.recreateDynamicStarfield();
-                return;
-            }
-            
+    // Unified star reset method
+    resetStars(playerPosition) {
+        if (!this.starfield || !this.starfield.geometry || 
+            !this.starfield.geometry.attributes.position || !playerPosition) {
+            console.error("Cannot reset stars: invalid parameters");
+            return;
+        }
+
             const positions = this.starfield.geometry.attributes.position.array;
-            const speeds = this.starfield.speeds;
-            const layerValues = this.starfield.layerValues;
-            
-            // Get player mesh
-            const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-            const playerMesh = this.playerMeshes.get(playerId);
-            
-            if (!playerMesh) {
-                console.warn("Player mesh not found - cannot update starfield positions");
-                return;
-            }
-            
-            // Initialize starting position if not set
-            if (!this.startPlayerPosition) {
-                this.startPlayerPosition = playerMesh.position.clone();
-                console.log("Initialized starfield reference position");
-            }
-            
-            // Get current time
-            const now = Date.now();
-            
-            // Get current player speed
-            let playerSpeed = 1.0;
-            if (this.controls && this.controls.baseSpeed) {
-                playerSpeed = this.controls.baseSpeed;
-            }
-            
-            // ENHANCED SAFETY CHECKS
-            // Verify we have star positions and recycling times
-            if (!positions || positions.length === 0) {
-                console.error("Star positions array is invalid - recreating");
-                this.recreateDynamicStarfield();
-                return;
-            }
-            
-            // Create recycling times array if missing
-            if (!this.lastStarRecyclingTimes || this.lastStarRecyclingTimes.length === 0) {
-                console.log("Creating missing star recycling times");
-                const starCount = positions.length / 3;
-                this.lastStarRecyclingTimes = new Float32Array(starCount);
-                for (let i = 0; i < starCount; i++) {
-                    this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
-                }
-            }
-            
-            // Create or update the last player position
-            if (!this.starfield.lastPlayerPosition) {
-                this.starfield.lastPlayerPosition = new THREE.Vector3();
-            }
-            const prevPosition = this.starfield.lastPlayerPosition.clone();
-            this.starfield.lastPlayerPosition.copy(playerMesh.position);
-            
-            // Get player's forward direction for efficient star recycling
-            const forwardDirection = new THREE.Vector3(0, 0, -1);
-            forwardDirection.applyQuaternion(playerMesh.quaternion);
-            
-            // TRACK STARS FOR RELIABILITY CHECKS
-            let visibleCount = 0;
-            let recycledCount = 0;
-            let farBehindCount = 0;
-            let farSideCount = 0;
-            let timeRecycledCount = 0;
-            
-            // Force periodic recycling for reliability
-            const timeSinceLastFullRefresh = now - (this.lastFullStarRefresh || 0);
-            const needsPeriodicRefresh = timeSinceLastFullRefresh > 60000; // Every 60 seconds
-            
-            if (needsPeriodicRefresh) {
-                console.log("Performing periodic star system refresh");
-                this.lastFullStarRefresh = now;
-                
-                // Force recycling of a percentage of stars to ensure fresh distribution
-                const forceRecycleCount = Math.floor(positions.length / 3 * 0.25); // 25% of stars
-                for (let i = 0; i < forceRecycleCount; i++) {
-                    const index = Math.floor(Math.random() * (positions.length / 3));
-                    if (index < this.lastStarRecyclingTimes.length) {
-                        this.lastStarRecyclingTimes[index] = now - 10000; // Force recycling
-                    }
-                }
-            }
-            
-            // IMPROVED RECYCLING PARAMETERS
-            // Base recycling chance increases with player speed
-            const baseRecycleChance = 0.01 + (playerSpeed * 0.002);
-            const baseRecycleInterval = Math.max(2000, 5000 / Math.sqrt(playerSpeed));
-            
-            // Update dynamic star positions with more resilient recycling
-            for (let i = 0; i < positions.length; i += 3) {
-                try {
-                    // Safety check for array bounds
-                    if (i + 2 >= positions.length) {
-                        continue;
-                    }
-                    
-                    const index = i / 3;
-                    
-                    // Safety check for arrays
-                    if (index >= layerValues.length || index >= speeds.length || 
-                        index >= this.lastStarRecyclingTimes.length) {
-                        continue;
-                    }
-                    
-                    const layer = layerValues[index];
-                    
-                    // Layer-specific speed scaling
-                    let layerSpeedFactor;
-                    if (layer === 0) { // Distant layer
-                        layerSpeedFactor = 0.3; // Slowest movement
-                    } else if (layer === 1) { // Mid-distance layer
-                        layerSpeedFactor = 0.6; // Medium movement
-                    } else { // Close layer
-                        layerSpeedFactor = 1.0; // Fastest movement
-                    }
-                    
-                    // Movement based on player speed with square root scaling
-                    const moveSpeed = speeds[index] * layerSpeedFactor * Math.sqrt(playerSpeed) * 0.9;
-                    
-                    // Move stars based on player movement
-                    positions[i] -= forwardDirection.x * moveSpeed;
-                    positions[i + 1] -= forwardDirection.y * moveSpeed;
-                    positions[i + 2] -= forwardDirection.z * moveSpeed;
-                    
-                    // Check if this star is in front of the player (visible)
-                    const relX = positions[i] - playerMesh.position.x;
-                    const relY = positions[i + 1] - playerMesh.position.y;
-                    const relZ = positions[i + 2] - playerMesh.position.z;
-                    
-                    // Calculate dot product with forward direction
-                    const dotProduct = forwardDirection.x * relX + forwardDirection.y * relY + forwardDirection.z * relZ;
-                    const isInFront = dotProduct < 0;
-                    
-                    if (isInFront) {
-                        visibleCount++;
-                    }
-                    
-                    // IMPROVED STAR RECYCLING WITH MULTIPLE TRIGGERS
-                    // 1. Star is too far behind player
-                    // 2. Star is too far from player position (sideways/above/below)
-                    // 3. Time/speed-based recycling for consistent density
-                    
-                    // Calculate distance from player
-                    const dx = positions[i] - playerMesh.position.x;
-                    const dy = positions[i + 1] - playerMesh.position.y;
-                    const dz = positions[i + 2] - playerMesh.position.z;
-                    const distanceSquared = dx*dx + dy*dy + dz*dz;
-                    
-                    // Calculate distance behind player (positive value = behind player)
-                    const distanceBehind = -dotProduct; // Negative dot product = in front, positive = behind
-                    
-                    // Check time since last recycling for this star
-                    const timeSinceRecycle = now - this.lastStarRecyclingTimes[index];
-                    
-                    // 1. Recycle if too far behind player
-                    // Different distances for different layers
-                    const maxDistanceBehind = 300 + (layer * 300); // Increased for reliability
-                    const isTooFarBehind = distanceBehind > maxDistanceBehind;
-                    
-                    // 2. Recycle if too far to sides
-                    const maxSideDistance = 2000 + (playerSpeed * 200); // Increased for reliability
-                    const isTooFarToSides = distanceSquared > (maxSideDistance * maxSideDistance);
-                    
-                    // 3. Time/speed-based recycling chance
-                    // Higher chance at higher speeds and for longer time since last recycle
-                    const recycleChanceFactor = Math.min(3.0, timeSinceRecycle / baseRecycleInterval);
-                    const adjustedRecycleChance = baseRecycleChance * recycleChanceFactor * Math.sqrt(playerSpeed);
-                    const isTimeToRecycle = timeSinceRecycle > baseRecycleInterval && Math.random() < adjustedRecycleChance;
-                    
-                    // TRACK RECYCLING REASONS FOR DEBUGGING
-                    if (isTooFarBehind) farBehindCount++;
-                    if (isTooFarToSides) farSideCount++;
-                    if (isTimeToRecycle) timeRecycledCount++;
-                    
-                    // NEW: Always ensure minimum visible stars directly in front
-                    const lowVisibilityEmergency = visibleCount < 200 && index % 10 === 0;
-                    
-                    // Recycle this star if any condition is met
-                    if (isTooFarBehind || isTooFarToSides || isTimeToRecycle || lowVisibilityEmergency) {
-                        // RELIABLE RECYCLING: Place in front of player in a focused area
-                        
-                        // Base recycle distance - scale with player speed
-                        const minForwardDistance = 500; // Reduced for more visibility
-                        const maxAdditionalDistance = 1000; // Increased for better distribution
-                        const speedScaledDistance = minForwardDistance + 
-                            (Math.random() * maxAdditionalDistance) * Math.sqrt(playerSpeed);
-                        
-                        // Create more variation in the cone angle based on star's layer
-                        const baseAngle = Math.PI / 3; // 60 degrees 
-                        const layerAdjustedAngle = baseAngle * (1.0 - (layer * 0.2));
-                        
-                        // Random angles for position in cone
-                        const randomAngle = (Math.random() * layerAdjustedAngle * 2) - layerAdjustedAngle;
-                        const randomElevation = (Math.random() * layerAdjustedAngle) - (layerAdjustedAngle/2);
-                        
-                        try {
-                            // Create a new direction vector in front of the player
-                            const direction = new THREE.Vector3();
-                            
-                            // Start with forward direction
-                            direction.copy(forwardDirection);
-                            
-                            // Apply rotation around Y axis (horizontal spread)
-                            const rotationY = new THREE.Quaternion();
-                            rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
-                            direction.applyQuaternion(rotationY);
-                            
-                            // Apply rotation around X axis (vertical spread)
-                            const rotationX = new THREE.Quaternion();
-                            rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
-                            direction.applyQuaternion(rotationX);
-                            
-                            // Position star in front of player using the calculated direction and distance
-                            positions[i] = playerMesh.position.x + (direction.x * speedScaledDistance);
-                            positions[i + 1] = playerMesh.position.y + (direction.y * speedScaledDistance);
-                            positions[i + 2] = playerMesh.position.z + (direction.z * speedScaledDistance);
-                        }
-                        catch (err) {
-                            // ULTRA-RELIABLE FALLBACK if quaternion method fails
-                            // Simple positioning directly in front of player
-                            const angle = Math.random() * Math.PI * 2;
-                            const elevationAngle = (Math.random() - 0.5) * Math.PI;
-                            const distance = 800 + Math.random() * 400;
-                            
-                            // Calculate position using simple trig
-                            positions[i] = playerMesh.position.x + Math.sin(angle) * Math.cos(elevationAngle) * distance;
-                            positions[i + 1] = playerMesh.position.y + Math.sin(elevationAngle) * distance;
-                            positions[i + 2] = playerMesh.position.z - Math.cos(angle) * Math.cos(elevationAngle) * distance;
-                        }
-                        
-                        // Update the last recycling time
-                        this.lastStarRecyclingTimes[index] = now;
-                        recycledCount++;
-                    }
-                } catch (err) {
-                    // Don't let a single star error crash the entire update
-                    console.warn(`Error updating star at index ${i}:`, err.message);
-                }
-            }
-            
-            // Force redraw of the starfield
-            this.starfield.geometry.attributes.position.needsUpdate = true;
-            
-            // Log detailed recycling stats occasionally
-            if (Math.random() < 0.01) {
-                console.log(`Stars: Recycled ${recycledCount} (behind: ${farBehindCount}, sides: ${farSideCount}, time: ${timeRecycledCount}), Visible: ${visibleCount}/${positions.length/3} at speed ${playerSpeed.toFixed(1)}`);
-            }
-            
-            // ULTRA-RELIABLE RECOVERY: Emergency star system refresh
-            // If too few stars are visible, trigger emergency recovery
-            const needsEmergencyRecovery = visibleCount < 100;
-            
-            if (needsEmergencyRecovery) {
-                console.warn(`EMERGENCY STARFIELD RECOVERY - only ${visibleCount} visible stars!`);
-                
-                // Try aggressive recovery measures
-                if (Math.random() < 0.5) {
-                    // Approach 1: Force recycle a large percentage of stars
-                    const starCount = positions.length / 3;
-                    const recycleCount = Math.min(starCount, 1000);
-                    
-                    for (let i = 0; i < recycleCount; i++) {
-                        try {
-                            const index = Math.floor(Math.random() * starCount);
-                            if (index < this.lastStarRecyclingTimes.length) {
-                                this.lastStarRecyclingTimes[index] = now - 10000; // Force recycling
-                            }
-                        } catch (err) {
-                            console.error("Error in emergency star recycling:", err);
-                        }
-                    }
-                } else {
-                    // Approach 2: Recreate the entire starfield system
-                    // But only do this rarely to avoid performance issues
-                    try {
-                        console.log("COMPLETE STARFIELD SYSTEM RESET");
-                        this.recreateDynamicStarfield();
-                        this.recreateBackgroundStarfield();
-                        this.lastFullStarRefresh = now;
-                    } catch (err) {
-                        console.error("Failed complete starfield reset:", err);
-                    }
-                }
-            }
-        }
-        catch (err) {
-            console.error("Critical error in updateStarfield:", err);
-            // Try to recover by recreating the starfield, but not on every frame
-            if (Math.random() < 0.2) {
-                try {
-                    console.log("Attempting to recover starfield...");
-                    this.recreateDynamicStarfield();
-                    this.recreateBackgroundStarfield();
-                }
-                catch (recoveryErr) {
-                    console.error("Failed to recover starfield:", recoveryErr);
-                }
-            }
-        }
-    }
-
-    // New method to recreate background starfield if it disappears
-    recreateBackgroundStarfield() {
-        console.log("Recreating background starfield due to disappearance");
         
-        try {
-            // Clean up old background starfield
-            if (this.backgroundStarfield) {
-                if (this.backgroundStarfield.parent) {
-                    this.backgroundStarfield.parent.remove(this.backgroundStarfield);
-                }
-                
-                if (this.backgroundStarfield.geometry) {
-                    this.backgroundStarfield.geometry.dispose();
-                }
-                
-                if (this.backgroundStarfield.material) {
-                    this.backgroundStarfield.material.dispose();
-                }
-            }
-            
-            if (this.backgroundStarfieldContainer) {
-                if (this.backgroundStarfieldContainer.parent) {
-                    this.backgroundStarfieldContainer.parent.remove(this.backgroundStarfieldContainer);
-                }
-                if (this.scene) {
-                    this.scene.remove(this.backgroundStarfieldContainer);
-                }
-            }
-            
-            // Create new background starfield
-            const backgroundStarCount = 15000;
-            const backgroundGeometry = new THREE.BufferGeometry();
-            const backgroundPositions = new Float32Array(backgroundStarCount * 3);
-            const backgroundSizes = new Float32Array(backgroundStarCount);
-            const backgroundColors = new Float32Array(backgroundStarCount * 3);
-            
-            // Generate background stars in a full sphere around the camera
-            for (let i = 0; i < backgroundStarCount; i++) {
-                const i3 = i * 3;
-                
-                // Generate positions on a sphere using better distribution
-                const phi = Math.acos(2 * Math.random() - 1);
-                const theta = 2 * Math.PI * Math.random();
-                const radius = 3000;
-                
-                // Convert to Cartesian coordinates
-                backgroundPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-                backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-                backgroundPositions[i3 + 2] = radius * Math.cos(phi);
-                
-                // Smaller stars for background
-                backgroundSizes[i] = Math.random() * 1.2 + 0.5;
-                
-                // Add color variation
-                const colorChoice = Math.random();
-                if (colorChoice > 0.992) {
-                    // Reddish
-                    backgroundColors[i3] = 1.0;
-                    backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                    backgroundColors[i3 + 2] = 0.5 + Math.random() * 0.3;
-                } else if (colorChoice > 0.98) {
-                    // Bluish
-                    backgroundColors[i3] = 0.5 + Math.random() * 0.3;
-                    backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                    backgroundColors[i3 + 2] = 1.0;
-                } else {
-                    // White/yellowish
-                    const brightness = 0.85 + Math.random() * 0.15;
-                    backgroundColors[i3] = brightness;
-                    backgroundColors[i3 + 1] = brightness;
-                    backgroundColors[i3 + 2] = brightness * (0.92 + Math.random() * 0.08);
-                }
-            }
-            
-            backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(backgroundPositions, 3));
-            backgroundGeometry.setAttribute('size', new THREE.BufferAttribute(backgroundSizes, 1));
-            backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
-            
-            // Create material with depth test disabled
-            const backgroundMaterial = new THREE.PointsMaterial({
-                size: 2.0,
-                sizeAttenuation: false,
-                transparent: true,
-                opacity: 0.9,
-                vertexColors: true,
-                vertexSizeAttribute: true,
-                depthTest: false // Disable depth testing to ensure stars are always visible
-            });
-            
-            this.backgroundStarfield = new THREE.Points(backgroundGeometry, backgroundMaterial);
-            this.backgroundStarfield.renderOrder = -1;
-            
-            // Create container and add to scene
-            this.backgroundStarfieldContainer = new THREE.Object3D();
-            this.backgroundStarfieldContainer.add(this.backgroundStarfield);
-            
-            if (this.scene) {
-                this.scene.add(this.backgroundStarfieldContainer);
-                
-                // Position at camera if available
-                if (this.camera) {
-                    this.backgroundStarfieldContainer.position.copy(this.camera.position);
-                }
-                
-                console.log("Successfully recreated background starfield");
-            } else {
-                console.error("Failed to add background starfield to scene - scene not available");
-            }
-        } catch (err) {
-            console.error("Error recreating background starfield:", err);
-        }
-    }
-
-    // New method to recreate dynamic starfield if it disappears
-    recreateDynamicStarfield() {
-        console.log("Recreating dynamic starfield due to disappearance");
-        
-        try {
-            // Remove old starfield if it exists
-            if (this.starfield) {
-                if (this.starfield.parent) {
-                    this.starfield.parent.remove(this.starfield);
-                }
-                if (this.scene) {
-                    this.scene.remove(this.starfield);
-                }
-                
-                // Proper cleanup of geometry and materials
-                if (this.starfield.geometry) {
-                    this.starfield.geometry.dispose();
-                }
-                if (this.starfield.material) {
-                    this.starfield.material.dispose();
-                }
-            }
-            
-            // Create new foreground dynamic starfield
-            const dynamicStarCount = 2000;
-            const starGeometry = new THREE.BufferGeometry();
-            const starPositions = new Float32Array(dynamicStarCount * 3);
-            const starSpeeds = new Float32Array(dynamicStarCount);
-            const starSizes = new Float32Array(dynamicStarCount);
-            const starLayerValues = new Float32Array(dynamicStarCount);
-            const starColors = new Float32Array(dynamicStarCount * 3);
-            
-            // Get player position if available
-            let playerPos = new THREE.Vector3(0, 0, 0);
-            let playerForward = new THREE.Vector3(0, 0, -1);
-            
-            if (this.camera) {
-                playerPos.copy(this.camera.position);
-                playerForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
-            }
-            
-            // Initialize new recycling times
-            this.lastStarRecyclingTimes = new Float32Array(dynamicStarCount);
-            const now = Date.now();
-            
-            // Create stars more concentrated in front of the camera
-            for (let i = 0; i < dynamicStarCount; i++) {
-                const i3 = i * 3;
-                
-                // Random position in a cone in front of the player
-                const coneAngle = Math.PI / 2; // 90 degrees cone
-                const randomAngle = (Math.random() * coneAngle * 2) - coneAngle;
-                const randomElevation = (Math.random() * coneAngle) - (coneAngle/2);
-                
-                // Random distance, biased toward closer stars
-                const distance = 200 + Math.pow(Math.random(), 0.7) * 1800;
-                
-                // Starting with forward vector
-                let direction = new THREE.Vector3();
-                direction.copy(playerForward);
-                
-                // Apply rotations
-                const rotationY = new THREE.Quaternion();
-                rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
-                direction.applyQuaternion(rotationY);
-                
-                const rotationX = new THREE.Quaternion();
-                rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
-                direction.applyQuaternion(rotationX);
-                
-                // Set star position
-                starPositions[i3] = playerPos.x + direction.x * distance;
-                starPositions[i3 + 1] = playerPos.y + direction.y * distance;
-                starPositions[i3 + 2] = playerPos.z + direction.z * distance;
-                
-                // Initialize properties
-                this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
-                starSpeeds[i] = Math.random() * 1.5 + 0.8;
-                starSizes[i] = Math.random() * 2.0 + 1.0;
-                
-                // Distribute layers evenly
-                if (i < dynamicStarCount * 0.4) {
-                    starLayerValues[i] = 2; // 40% close layer
-                } else if (i < dynamicStarCount * 0.7) {
-                    starLayerValues[i] = 1; // 30% middle layer
-                } else {
-                    starLayerValues[i] = 0; // 30% far layer
-                }
-                
-                // Add color variation
-                const colorChoice = Math.random();
-                if (colorChoice > 0.97) {
-                    // Reddish stars
-                    starColors[i3] = 1.0;
-                    starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                    starColors[i3 + 2] = 0.6 + Math.random() * 0.2;
-                } else if (colorChoice > 0.94) {
-                    // Bluish stars
-                    starColors[i3] = 0.6 + Math.random() * 0.2;
-                    starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                    starColors[i3 + 2] = 1.0;
-                } else {
-                    // White/yellowish stars
-                    const brightness = 0.9 + Math.random() * 0.1;
-                    starColors[i3] = brightness;
-                    starColors[i3 + 1] = brightness;
-                    starColors[i3 + 2] = brightness * (0.95 + Math.random() * 0.05);
-                }
-            }
-            
-            // Set attributes
-            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-            starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-            starGeometry.setAttribute('layerValue', new THREE.BufferAttribute(starLayerValues, 1));
-            starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-            
-            // Create material with depth testing disabled for better visibility
-            const starMaterial = new THREE.PointsMaterial({
-                size: 2.0,
-                sizeAttenuation: true,
-                transparent: true,
-                opacity: 1.0,
-                vertexColors: true,
-                vertexSizeAttribute: true,
-                depthTest: false // Disable depth testing for stars to always be visible
-            });
-            
-            // Create starfield
-            this.starfield = new THREE.Points(starGeometry, starMaterial);
-            this.starfield.speeds = starSpeeds;
-            this.starfield.layerValues = starLayerValues;
-            this.starfield.lastPlayerPosition = new THREE.Vector3();
-            this.starfield.renderOrder = 0;
-            
-            // Make sure to add it to the scene
-            if (this.scene) {
-                this.scene.add(this.starfield);
-                console.log("Successfully recreated dynamic starfield with improved reliability");
-            } else {
-                console.error("Failed to add starfield to scene - scene not available");
-            }
-            
-            // Store reference position
-            if (!this.startPlayerPosition) {
-                this.startPlayerPosition = playerPos.clone();
-            }
-            
-            // Reset last refresh time
-            this.lastFullStarRefresh = now;
-            
-        } catch (err) {
-            console.error("Error recreating dynamic starfield:", err);
-        }
-    }
-
-    // New method to partially reset the starfield to maintain consistent density
-    partialResetStarfield(playerPosition, fraction) {
-        const positions = this.starfield.geometry.attributes.position.array;
-        const layerValues = this.starfield.layerValues;
-        const totalStars = positions.length / 3;
-        const starsToReset = Math.floor(totalStars * fraction);
-        
-        // Get player forward direction
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        const playerMesh = this.playerMeshes.get(playerId);
-        
-        if (!playerMesh) return;
-        
-        const forwardDirection = new THREE.Vector3(0, 0, -1);
-        forwardDirection.applyQuaternion(playerMesh.quaternion);
-        
-        // Reset a fraction of the stars (randomly selected)
-        for (let count = 0; count < starsToReset; count++) {
-            // Pick a random star
-            const starIndex = Math.floor(Math.random() * totalStars);
-            const i = starIndex * 3;
-            
-            // Get star's layer
-            const layer = layerValues[starIndex];
-            
-            // Create a sphere of stars around the player with higher density in the front
-            const theta = Math.random() * Math.PI * 2; // Random angle around y-axis
-            const phi = Math.acos(2 * Math.random() - 1); // Random angle from y-axis
-            
-            // Different radius ranges for different layers
-            let minRadius, maxRadius;
-            if (layer === 0) { // Distant stars
-                minRadius = 500;
-                maxRadius = 2000;
-            } else if (layer === 1) { // Mid-distance stars
-                minRadius = 300;
-                maxRadius = 1200;
-            } else { // Close stars
-                minRadius = 200;
-                maxRadius = 800;
-            }
-            
-            const radius = minRadius + Math.random() * (maxRadius - minRadius);
-            
-            // Calculate spawn direction with bias toward player's forward direction
-            const spawnDir = new THREE.Vector3();
-            
-            // 80% chance to spawn in front of player
-            if (Math.random() < 0.8) {
-                // Spawn in front with some spread
-                spawnDir.copy(forwardDirection);
-                
-                // Apply random rotation around y-axis (±30°)
-                const randomAngle = (Math.random() * Math.PI/3) - (Math.PI/6);
-                const rotationY = new THREE.Quaternion();
-                rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
-                spawnDir.applyQuaternion(rotationY);
-                
-                // Apply random rotation around x-axis (±30°)
-                const randomElevation = (Math.random() * Math.PI/3) - (Math.PI/6);
-                const rotationX = new THREE.Quaternion();
-                rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
-                spawnDir.applyQuaternion(rotationX);
-            } else {
-                // Random direction from player for 20% of stars
-                // Convert spherical coordinates to Cartesian
-                spawnDir.set(
-                    Math.sin(phi) * Math.cos(theta),
-                    Math.sin(phi) * Math.sin(theta),
-                    Math.cos(phi)
-                );
-            }
-            
-            // Position the star
-            positions[i] = playerPosition.x + spawnDir.x * radius;
-            positions[i + 1] = playerPosition.y + spawnDir.y * radius;
-            positions[i + 2] = playerPosition.z + spawnDir.z * radius;
-        }
-        
-        this.starfield.geometry.attributes.position.needsUpdate = true;
-        console.log(`Partial starfield reset: ${starsToReset} stars repositioned.`);
-    }
-
-    // Reset entire starfield with improved positioning
-    resetEntireStarfield(playerPosition) {
-        const positions = this.starfield.geometry.attributes.position.array;
-        const layerValues = this.starfield.layerValues;
-        
-        // Get player forward direction
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        const playerMesh = this.playerMeshes.get(playerId);
-        
-        if (!playerMesh) return;
-        
-        const forwardDirection = new THREE.Vector3(0, 0, -1);
-        forwardDirection.applyQuaternion(playerMesh.quaternion);
-        
+        // Reset all dynamic stars around player
         for (let i = 0; i < positions.length; i += 3) {
-            // Get star's layer
-            const layerIndex = Math.floor(i / 3);
-            const layer = layerValues[layerIndex];
+            // Random direction from player
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(Math.random() * 2 - 1);
+            const radius = 300 + Math.random() * 700;
             
-            // Different radius ranges for different layers
-            let minRadius, maxRadius;
-            if (layer === 0) { // Distant stars
-                minRadius = 500;
-                maxRadius = 2000;
-            } else if (layer === 1) { // Mid-distance stars
-                minRadius = 300;
-                maxRadius = 1200;
-            } else { // Close stars
-                minRadius = 200;
-                maxRadius = 800;
-            }
-            
-            const radius = minRadius + Math.random() * (maxRadius - minRadius);
-            
-            // Calculate spawn direction with bias toward player's forward direction
-            const spawnDir = new THREE.Vector3();
-            
-            // Create higher density in front of player (80% of stars)
+            // 80% chance to position stars in front of player
             if (Math.random() < 0.8) {
-                // Start with forward direction
-                spawnDir.copy(forwardDirection);
+                // Get player forward direction
+                const forwardDirection = new THREE.Vector3(0, 0, -1);
+                if (this.camera && this.camera.quaternion) {
+                    forwardDirection.applyQuaternion(this.camera.quaternion);
+                }
                 
-                // Apply random rotation around y-axis (±45°)
-                const randomAngle = (Math.random() * Math.PI/2) - (Math.PI/4);
-                const rotationY = new THREE.Quaternion();
-                rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
-                spawnDir.applyQuaternion(rotationY);
+                // Add some randomness to direction
+                const randomizedDirection = forwardDirection.clone();
+                randomizedDirection.x += (Math.random() - 0.5) * 1.0;
+                randomizedDirection.y += (Math.random() - 0.5) * 1.0;
+                randomizedDirection.z += (Math.random() - 0.5) * 1.0;
+                randomizedDirection.normalize();
                 
-                // Apply random rotation around x-axis (±45°)
-                const randomElevation = (Math.random() * Math.PI/2) - (Math.PI/4);
-                const rotationX = new THREE.Quaternion();
-                rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
-                spawnDir.applyQuaternion(rotationX);
+                // Position star in this direction
+                positions[i] = playerPosition.x + randomizedDirection.x * radius;
+                positions[i + 1] = playerPosition.y + randomizedDirection.y * radius;
+                positions[i + 2] = playerPosition.z + randomizedDirection.z * radius;
             } else {
-                // For 20% of stars, position in random directions for all-around coverage
-                const theta = Math.random() * Math.PI * 2; // Random angle around y-axis
-                const phi = Math.acos(2 * Math.random() - 1); // Random angle from y-axis
-                
-                // Convert spherical coordinates to Cartesian
-                spawnDir.set(
-                    Math.sin(phi) * Math.cos(theta),
-                    Math.sin(phi) * Math.sin(theta),
-                    Math.cos(phi)
-                );
+                // Standard spherical distribution
+                positions[i] = playerPosition.x + radius * Math.sin(phi) * Math.cos(theta);
+                positions[i + 1] = playerPosition.y + radius * Math.sin(phi) * Math.sin(theta);
+                positions[i + 2] = playerPosition.z + radius * Math.cos(phi);
             }
-            
-            // Position the star
-            positions[i] = playerPosition.x + spawnDir.x * radius;
-            positions[i + 1] = playerPosition.y + spawnDir.y * radius;
-            positions[i + 2] = playerPosition.z + spawnDir.z * radius;
         }
         
+        // Mark geometry for update
         this.starfield.geometry.attributes.position.needsUpdate = true;
-        console.log("Complete starfield reset with improved positioning.");
+    }
+
+    // Single, consolidated updateStarfield method
+    updateStarfield() {
+        // Skip if essential components are missing
+        if (!this.starfield || !this.localPlayer) return;
+        
+        // Get player mesh with safety checks
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        if (!playerId) return;
+        
+        const playerMesh = this.playerMeshes?.get(playerId);
+        if (!playerMesh) return;
+        
+        // Ensure background stars follow the camera
+        if (this.backgroundStarfieldContainer && this.camera) {
+            this.backgroundStarfieldContainer.position.copy(this.camera.position);
+        }
+        
+        // Initialize player reference position if needed
+        if (!this.startPlayerPosition) {
+            this.startPlayerPosition = playerMesh.position.clone();
+        }
+        
+        // Track player movement
+        if (!this.starfield.lastPlayerPosition) {
+            this.starfield.lastPlayerPosition = new THREE.Vector3(0, 0, 0);
+        }
+        
+        // Get positions array safely
+        const positions = this.starfield.geometry.attributes.position.array;
+        if (!positions) return;
+        
+        // Ensure speeds array exists
+        if (!this.starfield.speeds) {
+            this.starfield.speeds = new Float32Array(positions.length / 3);
+            for (let i = 0; i < this.starfield.speeds.length; i++) {
+                this.starfield.speeds[i] = Math.random() * 2 + 0.5;
+            }
+        }
+        
+        // Get player movement direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        if (playerMesh.quaternion) {
+            forwardDirection.applyQuaternion(playerMesh.quaternion);
+        }
+        forwardDirection.normalize();
+        
+        // Get current distance and time
+        const distanceTraveled = this.localPlayer.distanceTraveled || 0;
+        const currentTime = Date.now();
+        
+        // Only reset based on time every 20 seconds - reduced frequency
+        if (currentTime - (this.lastStarResetTime || 0) > 20000) {
+            this.lastStarResetTime = currentTime;
+            console.log("Time-based star reset (partial)");
+            this.partialResetStars(playerMesh.position, forwardDirection);
+            return;
+        }
+        
+        // Reset based on distance - only after significant travel
+        if (!this.lastResetDistance) this.lastResetDistance = 0;
+        if (distanceTraveled - this.lastResetDistance > 800) {
+            this.lastResetDistance = distanceTraveled;
+            console.log("Distance-based star regeneration (ahead only)");
+            this.regenerateStarsAhead(playerMesh.position, forwardDirection);
+            return;
+        }
+        
+        // Get player speed for scaling
+        let moveSpeed = 1.0;
+        if (this.controls && typeof this.controls.baseSpeed === 'number') {
+            moveSpeed = this.controls.baseSpeed * 0.5; // Reduced for visual balance
+        }
+        
+        // Move stars to create motion illusion
+            for (let i = 0; i < positions.length; i += 3) {
+            // Move stars based on player direction
+            positions[i] -= forwardDirection.x * this.starfield.speeds[i / 3] * moveSpeed;
+            positions[i + 1] -= forwardDirection.y * this.starfield.speeds[i / 3] * moveSpeed;
+            positions[i + 2] -= forwardDirection.z * this.starfield.speeds[i / 3] * moveSpeed;
+            
+            // Calculate vector from player to star
+            const toStar = new THREE.Vector3(
+                positions[i] - playerMesh.position.x,
+                positions[i + 1] - playerMesh.position.y,
+                positions[i + 2] - playerMesh.position.z
+            );
+            
+            // Calculate distance from player
+            const distSq = toStar.lengthSq();
+            
+            // Only reset stars if:
+            // 1. They're very far from the player (over 1500 units) OR
+            // 2. They're behind the player (dot product with forward direction is negative)
+            //    AND they're at least 400 units behind
+            const dotProduct = toStar.dot(forwardDirection);
+            
+            // Star is behind player AND far enough away, OR star is extremely far in any direction
+            if ((dotProduct < 0 && distSq > 400*400) || distSq > 1500*1500) {
+                // Create a new star ahead of the player
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 0.6 - 0.3); // Focus more stars ahead
+                const radius = 400 + Math.random() * 300;
+                
+                // Base position on player's forward direction
+                // Get a position ahead of the player in their general direction
+                const adjustedDirection = forwardDirection.clone();
+                
+                // Add some randomness but keep the general forward direction
+                adjustedDirection.x += (Math.random() - 0.5) * 0.8;
+                adjustedDirection.y += (Math.random() - 0.5) * 0.8;
+                adjustedDirection.z += (Math.random() - 0.5) * 0.8;
+                adjustedDirection.normalize();
+                
+                // Position star ahead of player
+                positions[i] = playerMesh.position.x + adjustedDirection.x * radius;
+                positions[i + 1] = playerMesh.position.y + adjustedDirection.y * radius;
+                positions[i + 2] = playerMesh.position.z + adjustedDirection.z * radius;
+                
+                // Assign new random speed
+                this.starfield.speeds[i / 3] = Math.random() * 2 + 0.5;
+            }
+        }
+        
+        // Store current player position for next frame
+        this.starfield.lastPlayerPosition.copy(playerMesh.position);
+        
+        // Update geometry
+        this.starfield.geometry.attributes.position.needsUpdate = true;
+    }
+    
+    // Method to regenerate stars only ahead of the player
+    regenerateStarsAhead(playerPosition, forwardDirection) {
+        if (!this.starfield || !this.starfield.geometry || 
+            !this.starfield.geometry.attributes.position || !playerPosition) {
+            return;
+        }
+        
+        const positions = this.starfield.geometry.attributes.position.array;
+        
+        // Determine how many stars to regenerate (30% of total)
+        const totalStars = positions.length / 3;
+        const starsToRegenerate = Math.floor(totalStars * 0.3);
+        
+        // Arrays to track which stars to regenerate
+        const starIndices = [];
+        for (let i = 0; i < totalStars; i++) {
+            const idx = i * 3;
+            
+            // Calculate vector from player to star
+            const toStar = new THREE.Vector3(
+                positions[idx] - playerPosition.x,
+                positions[idx + 1] - playerPosition.y,
+                positions[idx + 2] - playerPosition.z
+            );
+            
+            // Check if star is behind player
+            const dotProduct = toStar.dot(forwardDirection);
+            const distSq = toStar.lengthSq();
+            
+            // If star is behind player, add it to candidates for regeneration
+            if (dotProduct < 0 || distSq > 1200*1200) {
+                starIndices.push(i);
+            }
+        }
+        
+        // Shuffle array to pick random stars
+        for (let i = starIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [starIndices[i], starIndices[j]] = [starIndices[j], starIndices[i]];
+        }
+        
+        // Regenerate the selected stars ahead of player
+        const regenerateCount = Math.min(starsToRegenerate, starIndices.length);
+        for (let i = 0; i < regenerateCount; i++) {
+            const starIdx = starIndices[i];
+            const posIdx = starIdx * 3;
+            
+            // Generate position in a cone ahead of player
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(Math.random() * 0.5); // Cone shape, mostly forward
+            const radius = 300 + Math.random() * 300;
+            
+            // Base position on forward direction with randomness
+            const dir = forwardDirection.clone();
+            dir.x += (Math.random() - 0.5) * 0.6;
+            dir.y += (Math.random() - 0.5) * 0.6;
+            dir.z += (Math.random() - 0.5) * 0.6;
+            dir.normalize();
+            
+            // Position ahead of player
+            positions[posIdx] = playerPosition.x + dir.x * radius;
+            positions[posIdx + 1] = playerPosition.y + dir.y * radius;
+            positions[posIdx + 2] = playerPosition.z + dir.z * radius;
+            
+            // Assign new random speed
+            if (this.starfield.speeds) {
+                this.starfield.speeds[starIdx] = Math.random() * 2 + 0.5;
+            }
+        }
+        
+        // Update geometry
+            this.starfield.geometry.attributes.position.needsUpdate = true;
+    }
+    
+    // Method to reset a portion of stars while preserving others
+    partialResetStars(playerPosition, forwardDirection) {
+        if (!this.starfield || !this.starfield.geometry || 
+            !this.starfield.geometry.attributes.position || !playerPosition) {
+            return;
+        }
+        
+        const positions = this.starfield.geometry.attributes.position.array;
+        
+        // Reset about 20% of stars, prioritizing those far from the player
+        const totalStars = positions.length / 3;
+        const starsToReset = Math.floor(totalStars * 0.2);
+        
+        // Calculate distances for all stars
+        const starDistances = [];
+        for (let i = 0; i < totalStars; i++) {
+            const idx = i * 3;
+            const dx = positions[idx] - playerPosition.x;
+            const dy = positions[idx + 1] - playerPosition.y;
+            const dz = positions[idx + 2] - playerPosition.z;
+            const distSq = dx*dx + dy*dy + dz*dz;
+            
+            // Check if behind player
+            const toStar = new THREE.Vector3(dx, dy, dz);
+            const dotProduct = toStar.dot(forwardDirection);
+            
+            starDistances.push({
+                index: i,
+                distSq: distSq,
+                isBehind: dotProduct < 0
+            });
+        }
+        
+        // Sort by: first behind player, then by distance
+        starDistances.sort((a, b) => {
+            // First priority: stars behind player
+            if (a.isBehind && !b.isBehind) return -1;
+            if (!a.isBehind && b.isBehind) return 1;
+            
+            // Second priority: distance (farthest first)
+            return b.distSq - a.distSq;
+        });
+        
+        // Reset the selected stars
+        for (let i = 0; i < starsToReset; i++) {
+            const starIdx = starDistances[i].index;
+            const posIdx = starIdx * 3;
+            
+            // Generate new position ahead of player
+            const radius = 300 + Math.random() * 300;
+            const dir = forwardDirection.clone();
+            
+            // Add some randomness but keep generally ahead
+            dir.x += (Math.random() - 0.5) * 0.8;
+            dir.y += (Math.random() - 0.5) * 0.8;
+            dir.z += (Math.random() - 0.5) * 0.8;
+            dir.normalize();
+            
+            // Position star ahead of player
+            positions[posIdx] = playerPosition.x + dir.x * radius;
+            positions[posIdx + 1] = playerPosition.y + dir.y * radius;
+            positions[posIdx + 2] = playerPosition.z + dir.z * radius;
+            
+            // Assign new random speed
+            if (this.starfield.speeds) {
+                this.starfield.speeds[starIdx] = Math.random() * 2 + 0.5;
+            }
+        }
+        
+        // Update geometry
+        this.starfield.geometry.attributes.position.needsUpdate = true;
     }
 
     setupNetworking(port) {
@@ -3495,21 +2978,21 @@ class GameClient {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
+            requestAnimationFrame(() => this.animate());
 
         // Check if the player is eliminated (game over)
         const isGameOver = this.localPlayer && this.localPlayer.eliminated;
         
         // Always update movement for camera controls, but with reduced functionality if game over
-        this.updateMovement();
-        
+            this.updateMovement();
+
         // Always update distance based on time (unless game over)
         if (!isGameOver) {
             this.updateDistanceBasedOnTime();
         }
 
         // ALWAYS update starfield regardless of game state for visual continuity
-        this.updateStarfield();
+                    this.updateStarfield();
         
         // Only update game elements if the game is running and not game over
         if (this.gameState.isRunning && !isGameOver) {
@@ -3594,25 +3077,25 @@ class GameClient {
             });
 
             // Update enemies
-            this.gameState.enemies.forEach(enemy => {
+                        this.gameState.enemies.forEach(enemy => {
                 if (!enemy.model) return;
-                
-                // Move towards center
-                const direction = new THREE.Vector3();
-                direction.subVectors(new THREE.Vector3(0, 0, 0), enemy.model.position);
-                direction.normalize();
-                
-                enemy.model.position.add(direction.multiplyScalar(enemy.speed));
-                enemy.model.lookAt(0, 0, 0);
-            });
+                            
+                            // Move towards center
+                            const direction = new THREE.Vector3();
+                            direction.subVectors(new THREE.Vector3(0, 0, 0), enemy.model.position);
+                            direction.normalize();
+                            
+                            enemy.model.position.add(direction.multiplyScalar(enemy.speed));
+                            enemy.model.lookAt(0, 0, 0);
+                        });
 
             // Spawn new enemies periodically
-            if (Math.random() < 0.005) {
-                this.spawnEnemyShip();
-            }
+                    if (Math.random() < 0.005) {
+                        this.spawnEnemyShip();
+                }
 
-            // Check for collisions
-            this.checkCollisions();
+                // Check for collisions
+                    this.checkCollisions();
             
             // Periodically clean up distant asteroids to maintain performance
             if (Math.random() < 0.05) { // ~3 times per second
@@ -3816,7 +3299,7 @@ class GameClient {
             this.showDifficultyNotification(this.difficultyLevel);
         }
     }
-    
+
     showSpeedUpNotification(percentIncrease) {
         // Log the speed increase but don't show any visual notification
         console.log(`SPEED INCREASE: +${percentIncrease}% speed increase`);
@@ -3980,7 +3463,7 @@ class GameClient {
                 
                 // If we haven't created this LOD level for this asteroid yet
                 if (!this.asteroidLODs[id][currentLevel]) {
-                    // Create a simplified version for this LOD level
+                        // Create a simplified version for this LOD level
                     let geometry;
                     
                     if (currentLevel === 'ultra_low' && this.lodModels.ultra_low) {
@@ -4268,9 +3751,9 @@ class GameClient {
             
             // Show actual increase in notification
             this.showSpeedUpNotification(Math.round(cappedIncrease));
-            return;
-        }
-        
+                    return;
+                }
+                
         // Show speed up notification for phase 1
         this.showSpeedUpNotification(Math.round(speedIncrease));
         
@@ -4285,13 +3768,26 @@ class GameClient {
     updateStarfield() {
         if (!this.starfield || !this.localPlayer) return;
         
+        // Initialize lastPlayerPosition if it doesn't exist
+        if (!this.starfield.lastPlayerPosition) {
+            this.starfield.lastPlayerPosition = new THREE.Vector3(0, 0, 0);
+        }
+        
         const positions = this.starfield.geometry.attributes.position.array;
-        const speeds = this.starfield.speeds;
+        
+        // Check if speeds array exists - if not, initialize it 
+        if (!this.starfield.speeds) {
+            this.starfield.speeds = new Float32Array(positions.length / 3);
+            for (let i = 0; i < this.starfield.speeds.length; i++) {
+                this.starfield.speeds[i] = Math.random() * 2 + 0.5;
+            }
+        }
         
         // Get player mesh - works in both single player and multiplayer modes
         const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        const playerMesh = this.playerMeshes.get(playerId);
+        if (!playerId) return; // Ensure playerId exists
         
+        const playerMesh = this.playerMeshes?.get(playerId);
         if (!playerMesh) return;
         
         // Initialize starting position if not set
@@ -4301,14 +3797,17 @@ class GameClient {
         
         // Calculate how far the player has moved since the last frame
         const playerMovement = new THREE.Vector3();
-        if (this.starfield.lastPlayerPosition.x !== 0 || 
-            this.starfield.lastPlayerPosition.y !== 0 || 
-            this.starfield.lastPlayerPosition.z !== 0) {
-            playerMovement.subVectors(playerMesh.position, this.starfield.lastPlayerPosition);
+        // Safety check before accessing vector properties
+        if (this.starfield.lastPlayerPosition) {
+            if (this.starfield.lastPlayerPosition.x !== 0 || 
+                this.starfield.lastPlayerPosition.y !== 0 || 
+                this.starfield.lastPlayerPosition.z !== 0) {
+                playerMovement.subVectors(playerMesh.position, this.starfield.lastPlayerPosition);
+            }
+            
+            // Store current position for next frame
+            this.starfield.lastPlayerPosition.copy(playerMesh.position);
         }
-        
-        // Store current position for next frame
-        this.starfield.lastPlayerPosition.copy(playerMesh.position);
         
         // Check if player has moved far enough to reset the entire starfield
         const distanceFromStart = playerMesh.position.distanceTo(this.startPlayerPosition);
@@ -4318,7 +3817,13 @@ class GameClient {
         if (distanceFromStart > 1500) {
             console.log("Resetting starfield reference (moved far from start)");
             this.startPlayerPosition.copy(playerMesh.position);
-            this.resetEntireStarfield(playerMesh.position);
+            // Safety check before calling resetEntireStarfield
+            if (typeof this.resetEntireStarfield === 'function') {
+                this.resetEntireStarfield(playerMesh.position);
+            } else {
+                // Fallback to resetStars if resetEntireStarfield doesn't exist
+                this.resetStars(playerMesh.position);
+            }
             return;
         }
         
@@ -4333,9 +3838,9 @@ class GameClient {
             positions[i + 2] -= playerMovement.z * 0.1;
             
             // Additional movement based on forward direction
-            positions[i] -= forwardDirection.x * speeds[i / 3];
-            positions[i + 1] -= forwardDirection.y * speeds[i / 3];
-            positions[i + 2] -= forwardDirection.z * speeds[i / 3];
+            positions[i] -= forwardDirection.x * this.starfield.speeds[i / 3];
+            positions[i + 1] -= forwardDirection.y * this.starfield.speeds[i / 3];
+            positions[i + 2] -= forwardDirection.z * this.starfield.speeds[i / 3];
 
             // Get star position relative to player
             const starX = positions[i] - playerMesh.position.x;
@@ -4491,7 +3996,7 @@ class GameClient {
         // Make sure we have an asteroids array initialized
         if (!this.asteroids) {
             console.log("Creating new asteroids array in updateAsteroids");
-            this.asteroids = [];
+                this.asteroids = [];
             return;
         }
 
