@@ -665,22 +665,30 @@ class GameClient {
             const playerForward = new THREE.Vector3(0, 0, -1);
             playerForward.applyQuaternion(playerMesh.quaternion);
             
-            // ENHANCED: Spawn distance scaled with player speed but within visibility range
-            const minSpawnDistance = 150; // Minimum distance regardless of speed
-            const speedScaledDistance = Math.min(130, 80 + (playerSpeed * 25)); // Cap the additional distance
-            const spawnDistance = minSpawnDistance + speedScaledDistance + (Math.random() * 100);
+            // ENHANCED: Spawn at greater distances scaled with player speed
+            const minSpawnDistance = 250; // Increased from 150 to 250
+            const speedScaledDistance = Math.min(350, 100 + (playerSpeed * 50)); // Higher cap for greater visibility
+            
+            // Add more randomness to spawn distance for depth perception
+            const randomDistanceOffset = Math.random() * 300; // Up to 300 units of random distance
+            const spawnDistance = minSpawnDistance + speedScaledDistance + randomDistanceOffset;
             
             // Use player position as the reference point
             const spawnPosition = playerMesh.position.clone();
             
+            // Determine if asteroid should directly target the player with varying accuracy
+            // More accurate targeting at higher difficulty or for special "hunter" asteroids
+            const directTargetingChance = Math.min(0.3, 0.1 + (this.difficultyLevel || 1) * 0.02);
+            const isHunterAsteroid = Math.random() < directTargetingChance;
+            
             // IMPROVED NEAR-PATH SPAWNING: Higher chance of spawning directly in or near player's path
-            const directPathChance = randomMode ? 0.2 : 0.85; // 85% chance to spawn in player's path
+            const directPathChance = randomMode ? 0.2 : 0.75; // 75% chance to spawn in player's path (reduced from 85%)
             const inPlayerPath = Math.random() < directPathChance;
             
             if (inPlayerPath) {
                 // Position directly in the player's path with minimal deviation
-                // Get player's exact forward path with very slight variation
-                const minDeviation = 0.07; // Minimal deviation for obstacles
+                // Get player's exact forward path with slight variation
+                const minDeviation = 0.1; // Increased from 0.07 for more spread
                 const xSpread = (Math.random() * minDeviation * 2) - minDeviation;
                 const ySpread = (Math.random() * minDeviation * 2) - minDeviation;
                 
@@ -694,12 +702,14 @@ class GameClient {
                 // Scale by spawn distance and add to player position
                 spawnPosition.add(directPathVector.multiplyScalar(spawnDistance));
                 
-                console.log(`DIRECT PATH ASTEROID spawned at distance ${spawnDistance.toFixed(1)} units`);
+                if (Math.random() < 0.1) { // Reduce logging
+                    console.log(`DIRECT PATH ASTEROID spawned at distance ${spawnDistance.toFixed(1)} units`);
+                }
             }
             else {
                 // Position near but not directly in player's path
                 // This creates asteroids that require navigation but aren't right in front
-                const pathOffset = 50 + (Math.random() * 80); // 50-130 units offset from direct path
+                const pathOffset = 80 + (Math.random() * 150); // 80-230 units offset from direct path (increased)
                 
                 // Get a vector perpendicular to forward direction
                 const perpendicularDir = new THREE.Vector3(-playerForward.z, 0, playerForward.x).normalize();
@@ -718,14 +728,16 @@ class GameClient {
                 // Combine both offsets
                 spawnPosition.add(forwardOffset).add(sideOffset);
                 
-                console.log(`NEAR PATH ASTEROID spawned at distance ${spawnDistance.toFixed(1)} units with ${pathOffset.toFixed(1)} offset`);
+                if (Math.random() < 0.05) { // Reduce logging
+                    console.log(`NEAR PATH ASTEROID spawned at distance ${spawnDistance.toFixed(1)} units with ${pathOffset.toFixed(1)} offset`);
+                }
             }
             
             // Set the asteroid position
             asteroid.mesh.position.copy(spawnPosition);
             
             // Ensure it's a large enough size to be visible
-            const minScale = 0.035; // Increased minimum size for better visibility
+            const minScale = 0.035; // Increased min size for better visibility
             const currentScale = asteroid.mesh.scale.x;
             
             if (currentScale < minScale) {
@@ -744,44 +756,93 @@ class GameClient {
             asteroid.velocity = new THREE.Vector3();
             asteroid.creationTime = Date.now();
             
-            // Higher chance of targeting behavior at higher speeds
-            const speedBasedTargetingChance = Math.min(0.65, 0.2 + (playerSpeed * 0.03));
-            asteroid.targeting = Math.random() < speedBasedTargetingChance;
+            // ENHANCED TARGETING:
+            // 1. Standard targeting (moderate)
+            // 2. Hunter asteroids (aggressive)
+            // 3. Random movement (minimal targeting)
             
-            // More aggressive targeting at higher speeds
-            asteroid.targetingSpeed = 0.05 + (Math.random() * 0.1) + (playerSpeed * 0.005);
-            asteroid.targetingFactor = asteroid.targeting ? (0.2 + Math.random() * 0.3 + (playerSpeed * 0.01)) : 0;
-            
-            // Calculate vector toward player with transverse motion
-            const transverseFactor = Math.random() * 0.25; // Up to 25% sideways motion
-            
-            // Direction toward player
-            const towardPlayer = new THREE.Vector3();
-            towardPlayer.subVectors(playerMesh.position, spawnPosition).normalize();
-            
-            // Get perpendicular vector for sideways motion
-            const sideways = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x).normalize();
-            if (Math.random() < 0.5) sideways.multiplyScalar(-1); // Random direction
-            
-            // Blend toward-player and sideways vectors
-            const moveDir = new THREE.Vector3()
-                .addScaledVector(towardPlayer, 1.0 - transverseFactor)
-                .addScaledVector(sideways, transverseFactor)
-                .normalize();
-            
-            // Use this mixed direction as velocity
-            asteroid.velocity.copy(moveDir);
+            // Determine targeting type and accuracy
+            if (isHunterAsteroid) {
+                // HUNTER asteroid - aggressively tracks player with high accuracy
+                asteroid.targeting = true;
+                asteroid.isHunter = true; // Special flag for hunter asteroids
+                
+                // Tracking speed - higher is more aggressive turning
+                asteroid.targetingSpeed = 0.1 + (Math.random() * 0.15) + (playerSpeed * 0.01);
+                
+                // Targeting factor - how accurately it tracks (higher = more accurate)
+                asteroid.targetingFactor = 0.4 + Math.random() * 0.4 + (playerSpeed * 0.02);
+                
+                // Set velocity to intersect with player's path with some randomness
+                const toPlayer = new THREE.Vector3();
+                toPlayer.subVectors(playerMesh.position, spawnPosition).normalize();
+                
+                // Initial velocity directly toward player's current position
+                asteroid.velocity.copy(toPlayer);
+                
+                // Make hunters visually distinguishable
+                if (asteroid.mesh && asteroid.mesh.material) {
+                    // Add subtle red tint to hunter asteroids
+                    if (Array.isArray(asteroid.mesh.material)) {
+                        asteroid.mesh.material.forEach(mat => {
+                            mat.color.setRGB(1.0, 0.7, 0.7);
+                        });
+                    } else {
+                        asteroid.mesh.material.color.setRGB(1.0, 0.7, 0.7);
+                    }
+                }
+                
+                console.log("Spawned HUNTER asteroid with aggressive tracking");
+            } 
+            else {
+                // Regular asteroid with variable targeting
+                // Higher chance of targeting behavior at higher speeds
+                const speedBasedTargetingChance = Math.min(0.55, 0.2 + (playerSpeed * 0.025));
+                asteroid.targeting = Math.random() < speedBasedTargetingChance;
+                asteroid.isHunter = false;
+                
+                // Moderate targeting for regular asteroids
+                asteroid.targetingSpeed = 0.05 + (Math.random() * 0.08) + (playerSpeed * 0.003);
+                asteroid.targetingFactor = asteroid.targeting ? (0.15 + Math.random() * 0.2) : 0;
+                
+                // Calculate vector toward player with transverse motion
+                const transverseFactor = Math.random() * 0.3; // Up to 30% sideways motion
+                
+                // Direction toward player
+                const towardPlayer = new THREE.Vector3();
+                towardPlayer.subVectors(playerMesh.position, spawnPosition).normalize();
+                
+                // Get perpendicular vector for sideways motion
+                const sideways = new THREE.Vector3(-towardPlayer.z, 0, towardPlayer.x).normalize();
+                if (Math.random() < 0.5) sideways.multiplyScalar(-1); // Random direction
+                
+                // Blend toward-player and sideways vectors
+                const moveDir = new THREE.Vector3()
+                    .addScaledVector(towardPlayer, 1.0 - transverseFactor)
+                    .addScaledVector(sideways, transverseFactor)
+                    .normalize();
+                
+                // Use this mixed direction as velocity
+                asteroid.velocity.copy(moveDir);
+            }
             
             // Scale velocity with player speed for better game feel
             const minSpeedFactor = 0.35; // Base speed factor
             const speedScaling = 0.04; // How much player speed affects asteroid speed
-            const speedFactor = minSpeedFactor + (playerSpeed * speedScaling);
+            
+            // Hunters move faster to catch up to player
+            const speedFactor = asteroid.isHunter 
+                ? (minSpeedFactor * 1.4) + (playerSpeed * speedScaling * 1.3) 
+                : minSpeedFactor + (playerSpeed * speedScaling);
+                
             asteroid.velocity.multiplyScalar(speedFactor);
             
             // Add slight random variations to make movement less predictable
-            asteroid.velocity.x += (Math.random() * 0.04 - 0.02);
-            asteroid.velocity.y += (Math.random() * 0.04 - 0.02);
-            asteroid.velocity.z += (Math.random() * 0.04 - 0.02);
+            // Less randomness for hunters to make their tracking more precise
+            const randomFactor = asteroid.isHunter ? 0.02 : 0.04;
+            asteroid.velocity.x += (Math.random() * randomFactor - randomFactor/2);
+            asteroid.velocity.y += (Math.random() * randomFactor - randomFactor/2);
+            asteroid.velocity.z += (Math.random() * randomFactor - randomFactor/2);
             
             // Enhanced rotation for more dynamic movement
             const rotSpeedBase = 0.015;
@@ -794,7 +855,6 @@ class GameClient {
             
             // Make sure asteroid is added to the scene
             if (!asteroid.mesh.parent) {
-                console.log("Adding asteroid mesh to scene");
                 this.scene.add(asteroid.mesh);
             }
             
@@ -1181,93 +1241,145 @@ class GameClient {
     updateAsteroids(dt) {
         // Skip if game is not running
         if (!this.gameState || !this.gameState.isRunning) return;
-
-        // Get the player mesh, needed for collision detection
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        
+        // Safety check
+        if (!this.asteroids) return;
+        
+        try {
+            // Get player mesh
+            const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
             const playerMesh = this.playerMeshes.get(playerId);
             
-            if (!playerMesh) return;
+            if (!playerMesh) return; // Can't update without player mesh
             
-        // Make sure we have an asteroids array initialized
-        if (!this.asteroids) {
-            this.asteroids = [];
-            return;
+            // Get player position for distance calculations
+            const playerPos = playerMesh.position.clone();
+            
+            // Get player's current speed
+            let playerSpeed = 1.0;
+            if (this.controls && this.controls.baseSpeed) {
+                playerSpeed = this.controls.baseSpeed;
+            }
+            
+            // Track visible asteroids for stats and debugging
+            let visibleCount = 0;
+            
+            // Local temp array to store collisions
+            const collisionResults = [];
+            
+            // Update each asteroid
+            for (let i = 0; i < this.asteroids.length; i++) {
+                const asteroid = this.asteroids[i];
+                
+                // Skip invalid asteroids
+                if (!asteroid || !asteroid.mesh) {
+                    continue;
+                }
+                
+                // Count how many asteroids are actually visible
+                if (asteroid.mesh.visible) {
+                    visibleCount++;
+                } else {
+                    // Force visibility on
+                    asteroid.mesh.visible = true;
+                }
+                
+                // IMPROVED TARGETING BEHAVIOR with variable accuracy
+                if (asteroid.targetingFactor > 0) {
+                    // Calculate direction to player
+                    const toPlayer = new THREE.Vector3().subVectors(playerPos, asteroid.mesh.position).normalize();
+                    
+                    // Current direction
+                    const currentDir = asteroid.velocity.clone().normalize();
+                    
+                    // Adjust targeting strength based on proximity to make close encounters more challenging
+                    const distance = asteroid.mesh.position.distanceTo(playerPos);
+                    
+                    // Different proximity factors for regular vs hunter asteroids
+                    let proximityFactor;
+                    
+                    if (asteroid.isHunter) {
+                        // Hunters get more accurate as they get closer
+                        proximityFactor = Math.max(0.8, Math.min(3.0, 800 / Math.max(10, distance)));
+                    } else {
+                        // Regular asteroids have moderate proximity adjustment
+                        proximityFactor = Math.max(0.5, Math.min(1.5, 400 / Math.max(10, distance)));
+                    }
+                    
+                    // Add some randomization to targeting accuracy (variable accuracy)
+                    const accuracyVariance = asteroid.isHunter ? 0.1 : 0.3; // Hunters have less variance
+                    const randomAccuracyFactor = 1.0 - (Math.random() * accuracyVariance);
+                    
+                    // Calculate adjustment strength based on targeting factor with accuracy variation
+                    const adjustmentStrength = asteroid.targetingFactor * asteroid.targetingSpeed * 
+                                              proximityFactor * randomAccuracyFactor;
+                    
+                    // Blend current direction with player direction
+                    const newDir = new THREE.Vector3()
+                        .addScaledVector(currentDir, 1.0 - adjustmentStrength)
+                        .addScaledVector(toPlayer, adjustmentStrength)
+                        .normalize();
+                    
+                    // Adjust speed based on player speed to maintain challenge
+                    // Hunters move faster to catch up
+                    let speedFactor;
+                    if (asteroid.isHunter) {
+                        // Hunters move faster than regular asteroids
+                        speedFactor = 0.3 + (playerSpeed * 0.05);
+                    } else {
+                        // Regular asteroids move at moderate speeds
+                        speedFactor = 0.2 + (playerSpeed * 0.03);
+                    }
+                    
+                    // Set the new velocity
+                    asteroid.velocity.copy(newDir).multiplyScalar(speedFactor);
+                }
+                
+                // Update position based on velocity
+                asteroid.mesh.position.add(asteroid.velocity);
+                
+                // Apply rotation
+                if (asteroid.rotationSpeed) {
+                    asteroid.mesh.rotation.x += asteroid.rotationSpeed.x;
+                    asteroid.mesh.rotation.y += asteroid.rotationSpeed.y;
+                    asteroid.mesh.rotation.z += asteroid.rotationSpeed.z;
+                }
+                
+                // Calculate distance from player
+                const distance = asteroid.mesh.position.distanceTo(playerPos);
+                
+                // Close enough for collision?
+                const collisionThreshold = 10 + (asteroid.size || 1) * 0.7;
+                if (distance < collisionThreshold) {
+                    collisionResults.push(asteroid);
+                }
+                
+                // Check if out of range (too far from player)
+                // Use a larger distance for hunters so they can track from further away
+                const maxDistance = asteroid.isHunter ? 
+                    (3000 + (playerSpeed * 300)) : // Hunters stay visible longer
+                    (2000 + (playerSpeed * 200));  // Regular asteroids
+                    
+                if (distance > maxDistance && !asteroid.isEmergency) {
+                    // Return asteroid to pool and remove from active list
+                    this.returnAsteroidToPool(asteroid);
+                    this.asteroids.splice(i, 1);
+                    i--; // Adjust index after removal
+                }
+            }
+            
+            // Process any collisions
+            collisionResults.forEach(asteroid => {
+                this.handleAsteroidCollision(asteroid);
+            });
+            
+            // Log stats occasionally
+            if (Math.random() < 0.005) {
+                console.log(`Visible asteroids: ${visibleCount}/${this.asteroids.length}, Hunters: ${this.asteroids.filter(a => a.isHunter).length}`);
+            }
         }
-
-        // Get the player position for calculations
-        const playerPos = playerMesh.position;
-        const collisionResults = [];
-
-        // Loop through active asteroids
-        for (let i = this.asteroids.length - 1; i >= 0; i--) {
-            const asteroid = this.asteroids[i];
-            
-            // Skip inactive asteroids
-            if (!asteroid || !asteroid.mesh || asteroid.inactive) {
-                this.asteroids.splice(i, 1);
-                continue;
-            }
-            
-            // Dynamic targeting - adjust velocity to track player
-            if (asteroid.targetingFactor > 0) {
-                // Calculate direction to player
-                const toPlayer = new THREE.Vector3().subVectors(playerPos, asteroid.mesh.position).normalize();
-                
-                // Current direction
-                const currentDir = asteroid.velocity.clone().normalize();
-                
-                // Reduced adjustment strength for less accurate tracking
-                const adjustmentStrength = asteroid.targetingFactor * 0.014;
-                const newDir = new THREE.Vector3()
-                    .addScaledVector(currentDir, 1 - adjustmentStrength)
-                    .addScaledVector(toPlayer, adjustmentStrength)
-                    .normalize();
-                
-                // Keep the same speed but adjust direction
-                const speed = asteroid.velocity.length();
-                asteroid.velocity.copy(newDir.multiplyScalar(speed));
-            }
-
-            // Update position
-            asteroid.mesh.position.add(asteroid.velocity);
-
-            // Update rotation
-            if (asteroid.rotationSpeed) {
-                asteroid.mesh.rotation.x += asteroid.rotationSpeed.x || 0.01;
-                asteroid.mesh.rotation.y += asteroid.rotationSpeed.y || 0.01;
-            }
-
-            // Collision detection
-            const dx = asteroid.mesh.position.x - playerPos.x;
-            const dy = asteroid.mesh.position.y - playerPos.y;
-            const dz = asteroid.mesh.position.z - playerPos.z;
-            const distanceSquared = dx * dx + dy * dy + dz * dz;
-            
-            // Collision thresholds
-            const playerSize = 2.0;
-            const asteroidSize = asteroid.size * 12;
-            const collisionThreshold = playerSize + asteroidSize;
-            const collisionThresholdSquared = collisionThreshold * collisionThreshold;
-            
-            if (distanceSquared < collisionThresholdSquared) {
-                collisionResults.push(asteroid);
-            }
-
-            // Deactivate if too far from player
-            if (asteroid.mesh.position.distanceTo(playerPos) > 500) {
-                // Remove from scene
-                    this.scene.remove(asteroid.mesh);
-                // Remove from array
-                this.asteroids.splice(i, 1);
-            } else {
-                // Apply LOD based on distance
-                this.updateAsteroidLOD(asteroid);
-            }
-        }
-
-        // Handle all collisions after updates
-        for (const asteroid of collisionResults) {
-            this.handleAsteroidCollision(asteroid);
+        catch (err) {
+            console.error("Error in updateAsteroids:", err);
         }
     }
 
@@ -1343,6 +1455,12 @@ class GameClient {
 
             // Game over if health reaches 0
             if (this.localPlayer.health <= 0) {
+                // IMPORTANT: Mark the game as over
+                this.gameState.isRunning = false;
+                
+                // Mark player as eliminated
+                this.localPlayer.eliminated = true;
+                
                 // Notify server if connected
                 if (this.network && !this.network.singlePlayerMode) {
                     this.network.gameOver();
@@ -1369,6 +1487,8 @@ class GameClient {
                 
                 // Disable player controls
                 this.disableControls();
+                
+                console.log("GAME OVER - Stopping gameplay updates while maintaining visuals");
             }
         }
     }
@@ -1681,7 +1801,7 @@ class GameClient {
     // Create a dual-layer starfield system with static background and dynamic foreground
     createDynamicStarfield() {
         // 1. Create the static background starfield (far away, doesn't move relative to player)
-        const backgroundStarCount = 30000; // REDUCED from 60,000 to 30,000
+        const backgroundStarCount = 15000; // REDUCED from 30,000 to 15,000
         const backgroundGeometry = new THREE.BufferGeometry();
         const backgroundPositions = new Float32Array(backgroundStarCount * 3);
         const backgroundSizes = new Float32Array(backgroundStarCount);
@@ -1700,8 +1820,8 @@ class GameClient {
             backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
             backgroundPositions[i3 + 2] = radius * Math.cos(phi);
             
-            // Random small sizes for background stars
-            backgroundSizes[i] = Math.random() * 1.8 + 0.7;
+            // SMALLER stars for background
+            backgroundSizes[i] = Math.random() * 1.2 + 0.5; // Reduced from 1.8+0.7
             
             // Add color variation to make it more realistic
             const colorChoice = Math.random();
@@ -1729,7 +1849,7 @@ class GameClient {
         backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
         
         const backgroundMaterial = new THREE.PointsMaterial({
-            size: 2.5,
+            size: 2.0, // Reduced from 2.5
             sizeAttenuation: false,
             transparent: true,
             opacity: 0.9,
@@ -1749,7 +1869,7 @@ class GameClient {
         this.initialCameraQuaternion = this.camera.quaternion.clone();
         
         // 2. Create the foreground dynamic starfield with FEWER stars
-        const dynamicStarCount = 4000; // REDUCED from 8,000 to 4,000 - more efficient
+        const dynamicStarCount = 2000; // REDUCED from 4,000 to 2,000
         const starGeometry = new THREE.BufferGeometry();
         const starPositions = new Float32Array(dynamicStarCount * 3);
         const starSpeeds = new Float32Array(dynamicStarCount);
@@ -1770,8 +1890,8 @@ class GameClient {
             const randomAngle = (Math.random() * coneAngle * 2) - coneAngle;
             const randomElevation = (Math.random() * coneAngle) - (coneAngle/2);
             
-            // Random distance within 1500 units, biased toward closer stars
-            const distance = Math.pow(Math.random(), 0.7) * 1500;
+            // Random distance within 2000 units, biased toward closer stars
+            const distance = Math.pow(Math.random(), 0.7) * 2000;
             
             // Basic forward vector
             let vx = 0, vy = 0, vz = -1;
@@ -1800,9 +1920,9 @@ class GameClient {
             // Initialize recycling time to now with some randomization
             this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
             
-            // Speed and layer settings
-            starSpeeds[i] = Math.random() * 2.0 + 1.0; // Faster speeds for better effect
-            starSizes[i] = Math.random() * 3.0 + 1.5;
+            // Speed and layer settings - SMALLER stars
+            starSpeeds[i] = Math.random() * 1.5 + 0.8; // Reduced from 2.0+1.0
+            starSizes[i] = Math.random() * 2.0 + 1.0; // Reduced from 3.0+1.5
             
             // Layer distribution - bias toward closer layers for better visuals
             const layerRandom = Math.random();
@@ -1841,7 +1961,7 @@ class GameClient {
         starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
         
         const starMaterial = new THREE.PointsMaterial({
-            size: 3.0,
+            size: 2.0, // Reduced from 3.0
             sizeAttenuation: true,
             transparent: true,
             opacity: 1.0,
@@ -1858,437 +1978,631 @@ class GameClient {
         
         // Store the original player position when we create the starfield
         this.startPlayerPosition = null;
-        this.starfieldResetDistance = 1200;
+        this.starfieldResetDistance = 5000; // Increased from 1200 for long-distance travel
         this.lastFullStarfieldReset = 0;
+        this.lastStarfieldMaxDistance = 5000; // Track max distance for resets
         
-        console.log("Optimized starfield created with fewer stars and efficient recycling");
+        console.log("Optimized starfield created with fewer, smaller stars");
     }
 
     // Update the starfield system with improved visibility
     updateStarfield() {
-        // Check if all required elements exist
-        if (!this.starfield || !this.localPlayer) {
-            console.warn("Starfield or local player not initialized");
-            return;
-        }
-        
-        if (!this.backgroundStarfieldContainer || !this.backgroundStarfield) {
-            console.warn("Background starfield elements missing");
-            this.recreateBackgroundStarfield();
-            return;
-        }
-        
-        // 1. KEEP BACKGROUND STARS ALWAYS ATTACHED TO CAMERA
-        if (this.camera) {
-            this.backgroundStarfieldContainer.position.copy(this.camera.position);
-            this.backgroundStarfield.visible = true;
+        // Always run this method regardless of game state
+        try {
+            // SAFETY CHECKS - Recreate missing components
+            if (!this.starfield) {
+                console.error("Starfield is missing - recreating");
+                this.recreateDynamicStarfield();
+                return;
+            }
             
-            // Very subtle rotation for parallax effect
-            const cameraDirection = new THREE.Vector3(0, 0, -1);
-            cameraDirection.applyQuaternion(this.camera.quaternion);
+            if (!this.localPlayer) {
+                console.warn("Local player not initialized, can't update starfield");
+                return;
+            }
             
-            this.backgroundStarfield.rotation.x += cameraDirection.y * 0.00005;
-            this.backgroundStarfield.rotation.y += cameraDirection.x * 0.00005;
-        }
-        
-        // 2. Handle the dynamic foreground stars - Check if all necessary components exist
-        if (!this.starfield.geometry || !this.starfield.geometry.attributes || 
-            !this.starfield.geometry.attributes.position || !this.starfield.speeds || !this.starfield.layerValues) {
-            console.error("Critical starfield components missing");
-            this.recreateDynamicStarfield();
-            return;
-        }
-        
-        const positions = this.starfield.geometry.attributes.position.array;
-        const speeds = this.starfield.speeds;
-        const layerValues = this.starfield.layerValues;
-        
-        // Make sure foreground starfield is visible
-        this.starfield.visible = true;
-        
-        // Get player mesh - works in both single player and multiplayer modes
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        const playerMesh = this.playerMeshes.get(playerId);
-        
-        if (!playerMesh) {
-            console.warn("Player mesh not found");
-            return;
-        }
-        
-        // Initialize starting position if not set
-        if (!this.startPlayerPosition) {
-            this.startPlayerPosition = playerMesh.position.clone();
-            console.log("Initialized starfield reference position");
-        }
-        
-        // Calculate how far the player has moved since the last frame
-        const playerMovement = new THREE.Vector3();
-        if (this.starfield.lastPlayerPosition) {
-            playerMovement.subVectors(playerMesh.position, this.starfield.lastPlayerPosition);
-        }
-        
-        // Store current position for next frame
-        if (!this.starfield.lastPlayerPosition) {
-            this.starfield.lastPlayerPosition = new THREE.Vector3();
-        }
-        this.starfield.lastPlayerPosition.copy(playerMesh.position);
-        
-        // Get current time
-        const now = Date.now();
-        
-        // Get current player speed
-        let playerSpeed = 1.0;
-        if (this.controls && this.controls.baseSpeed) {
-            playerSpeed = this.controls.baseSpeed;
-        }
-        
-        // SAFETY CHECK: Verify we have star positions to work with
-        if (!positions || positions.length === 0) {
-            console.error("Star positions array is invalid");
-            this.recreateDynamicStarfield();
-            return;
-        }
-        
-        // Get player's forward direction for efficient star recycling
-        const forwardDirection = new THREE.Vector3(0, 0, -1);
-        forwardDirection.applyQuaternion(playerMesh.quaternion);
-        
-        // OPTIMIZED: Skip using the slow partial/full starfield resets
-        // Instead, directly recycle stars in the update loop based on player speed
-        
-        // Speed-based recycling config - faster speeds = more aggressive recycling
-        const baseRecycleChance = 0.01; // Base chance per star to recycle at speed 1.0
-        const speedEffectOnRecycling = Math.sqrt(playerSpeed); // Square root scaling
-        const adjustedRecycleChance = baseRecycleChance * speedEffectOnRecycling;
-        
-        // Enhanced recycling time intervals - faster with higher speeds
-        const baseRecycleInterval = 5000; // 5 seconds at speed 1.0
-        const adjustedRecycleInterval = baseRecycleInterval / speedEffectOnRecycling;
-        
-        // Track stats for logging
-        let recycledStars = 0;
-        let visibleStars = 0;
-        
-        // Update dynamic star positions with speed-based movement and aggressive recycling
-        for (let i = 0; i < positions.length; i += 3) {
-            try {
-                // Safety check for array bounds
-                if (i + 2 >= positions.length) {
-                    continue;
+            if (!this.backgroundStarfieldContainer || !this.backgroundStarfield) {
+                console.warn("Background starfield elements missing - recreating");
+                this.recreateBackgroundStarfield();
+                
+                // Exit early if recreation fails
+                if (!this.backgroundStarfieldContainer || !this.backgroundStarfield) {
+                    console.error("Failed to recreate background starfield");
+                    return;
                 }
+            }
+            
+            // CRITICAL: Force visibility on all starfield components
+            if (this.backgroundStarfield) this.backgroundStarfield.visible = true;
+            if (this.starfield) this.starfield.visible = true;
+            
+            // 1. KEEP BACKGROUND STARS ALWAYS ATTACHED TO CAMERA
+            if (this.camera) {
+                this.backgroundStarfieldContainer.position.copy(this.camera.position);
                 
-                const index = i / 3;
+                // Apply very subtle rotation for parallax effect
+                const cameraDirection = new THREE.Vector3(0, 0, -1);
+                cameraDirection.applyQuaternion(this.camera.quaternion);
                 
-                // Safety check for arrays
-                if (index >= layerValues.length || index >= speeds.length) {
-                    continue;
+                this.backgroundStarfield.rotation.x += cameraDirection.y * 0.00005;
+                this.backgroundStarfield.rotation.y += cameraDirection.x * 0.00005;
+            }
+            
+            // 2. HANDLE FOREGROUND STARS WITH IMPROVED RELIABILITY
+            // Double check all necessary components exist
+            if (!this.starfield.geometry || !this.starfield.geometry.attributes || 
+                !this.starfield.geometry.attributes.position || !this.starfield.speeds || !this.starfield.layerValues) {
+                console.error("Critical starfield components missing - recreating dynamic starfield");
+                this.recreateDynamicStarfield();
+                return;
+            }
+            
+            const positions = this.starfield.geometry.attributes.position.array;
+            const speeds = this.starfield.speeds;
+            const layerValues = this.starfield.layerValues;
+            
+            // Get player mesh
+            const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+            const playerMesh = this.playerMeshes.get(playerId);
+            
+            if (!playerMesh) {
+                console.warn("Player mesh not found - cannot update starfield positions");
+                return;
+            }
+            
+            // Initialize starting position if not set
+            if (!this.startPlayerPosition) {
+                this.startPlayerPosition = playerMesh.position.clone();
+                console.log("Initialized starfield reference position");
+            }
+            
+            // Get current time
+            const now = Date.now();
+            
+            // Get current player speed
+            let playerSpeed = 1.0;
+            if (this.controls && this.controls.baseSpeed) {
+                playerSpeed = this.controls.baseSpeed;
+            }
+            
+            // ENHANCED SAFETY CHECKS
+            // Verify we have star positions and recycling times
+            if (!positions || positions.length === 0) {
+                console.error("Star positions array is invalid - recreating");
+                this.recreateDynamicStarfield();
+                return;
+            }
+            
+            // Create recycling times array if missing
+            if (!this.lastStarRecyclingTimes || this.lastStarRecyclingTimes.length === 0) {
+                console.log("Creating missing star recycling times");
+                const starCount = positions.length / 3;
+                this.lastStarRecyclingTimes = new Float32Array(starCount);
+                for (let i = 0; i < starCount; i++) {
+                    this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
                 }
+            }
+            
+            // Create or update the last player position
+            if (!this.starfield.lastPlayerPosition) {
+                this.starfield.lastPlayerPosition = new THREE.Vector3();
+            }
+            const prevPosition = this.starfield.lastPlayerPosition.clone();
+            this.starfield.lastPlayerPosition.copy(playerMesh.position);
+            
+            // Get player's forward direction for efficient star recycling
+            const forwardDirection = new THREE.Vector3(0, 0, -1);
+            forwardDirection.applyQuaternion(playerMesh.quaternion);
+            
+            // TRACK STARS FOR RELIABILITY CHECKS
+            let visibleCount = 0;
+            let recycledCount = 0;
+            let farBehindCount = 0;
+            let farSideCount = 0;
+            let timeRecycledCount = 0;
+            
+            // Force periodic recycling for reliability
+            const timeSinceLastFullRefresh = now - (this.lastFullStarRefresh || 0);
+            const needsPeriodicRefresh = timeSinceLastFullRefresh > 60000; // Every 60 seconds
+            
+            if (needsPeriodicRefresh) {
+                console.log("Performing periodic star system refresh");
+                this.lastFullStarRefresh = now;
                 
-                const layer = layerValues[index];
-                
-                // Layer-specific speed scaling
-                let layerSpeedFactor;
-                if (layer === 0) { // Distant layer
-                    layerSpeedFactor = 0.3; // Slowest movement
-                } else if (layer === 1) { // Mid-distance layer
-                    layerSpeedFactor = 0.6; // Medium movement
-                } else { // Close layer
-                    layerSpeedFactor = 1.0; // Fastest movement
+                // Force recycling of a percentage of stars to ensure fresh distribution
+                const forceRecycleCount = Math.floor(positions.length / 3 * 0.25); // 25% of stars
+                for (let i = 0; i < forceRecycleCount; i++) {
+                    const index = Math.floor(Math.random() * (positions.length / 3));
+                    if (index < this.lastStarRecyclingTimes.length) {
+                        this.lastStarRecyclingTimes[index] = now - 10000; // Force recycling
+                    }
                 }
-                
-                // Movement based on player speed - IMPROVED VISUAL SCALING
-                // Use square root scaling for better visual balance at all speeds
-                const moveSpeed = speeds[index] * layerSpeedFactor * Math.sqrt(playerSpeed) * 0.9;
-                
-                // Move stars based on player movement (creates the illusion of flying past)
-                positions[i] -= forwardDirection.x * moveSpeed;
-                positions[i + 1] -= forwardDirection.y * moveSpeed;
-                positions[i + 2] -= forwardDirection.z * moveSpeed;
-                
-                // Check if this star is in front of the player (visible)
-                const relX = positions[i] - playerMesh.position.x;
-                const relY = positions[i + 1] - playerMesh.position.y;
-                const relZ = positions[i + 2] - playerMesh.position.z;
-                
-                // Calculate dot product with forward direction
-                const dotProduct = forwardDirection.x * relX + forwardDirection.y * relY + forwardDirection.z * relZ;
-                const isInFront = dotProduct < 0;
-                
-                if (isInFront) {
-                    visibleStars++;
+            }
+            
+            // IMPROVED RECYCLING PARAMETERS
+            // Base recycling chance increases with player speed
+            const baseRecycleChance = 0.01 + (playerSpeed * 0.002);
+            const baseRecycleInterval = Math.max(2000, 5000 / Math.sqrt(playerSpeed));
+            
+            // Update dynamic star positions with more resilient recycling
+            for (let i = 0; i < positions.length; i += 3) {
+                try {
+                    // Safety check for array bounds
+                    if (i + 2 >= positions.length) {
+                        continue;
+                    }
+                    
+                    const index = i / 3;
+                    
+                    // Safety check for arrays
+                    if (index >= layerValues.length || index >= speeds.length || 
+                        index >= this.lastStarRecyclingTimes.length) {
+                        continue;
+                    }
+                    
+                    const layer = layerValues[index];
+                    
+                    // Layer-specific speed scaling
+                    let layerSpeedFactor;
+                    if (layer === 0) { // Distant layer
+                        layerSpeedFactor = 0.3; // Slowest movement
+                    } else if (layer === 1) { // Mid-distance layer
+                        layerSpeedFactor = 0.6; // Medium movement
+                    } else { // Close layer
+                        layerSpeedFactor = 1.0; // Fastest movement
+                    }
+                    
+                    // Movement based on player speed with square root scaling
+                    const moveSpeed = speeds[index] * layerSpeedFactor * Math.sqrt(playerSpeed) * 0.9;
+                    
+                    // Move stars based on player movement
+                    positions[i] -= forwardDirection.x * moveSpeed;
+                    positions[i + 1] -= forwardDirection.y * moveSpeed;
+                    positions[i + 2] -= forwardDirection.z * moveSpeed;
+                    
+                    // Check if this star is in front of the player (visible)
+                    const relX = positions[i] - playerMesh.position.x;
+                    const relY = positions[i + 1] - playerMesh.position.y;
+                    const relZ = positions[i + 2] - playerMesh.position.z;
+                    
+                    // Calculate dot product with forward direction
+                    const dotProduct = forwardDirection.x * relX + forwardDirection.y * relY + forwardDirection.z * relZ;
+                    const isInFront = dotProduct < 0;
+                    
+                    if (isInFront) {
+                        visibleCount++;
+                    }
+                    
+                    // IMPROVED STAR RECYCLING WITH MULTIPLE TRIGGERS
+                    // 1. Star is too far behind player
+                    // 2. Star is too far from player position (sideways/above/below)
+                    // 3. Time/speed-based recycling for consistent density
+                    
+                    // Calculate distance from player
+                    const dx = positions[i] - playerMesh.position.x;
+                    const dy = positions[i + 1] - playerMesh.position.y;
+                    const dz = positions[i + 2] - playerMesh.position.z;
+                    const distanceSquared = dx*dx + dy*dy + dz*dz;
+                    
+                    // Calculate distance behind player (positive value = behind player)
+                    const distanceBehind = -dotProduct; // Negative dot product = in front, positive = behind
+                    
+                    // Check time since last recycling for this star
+                    const timeSinceRecycle = now - this.lastStarRecyclingTimes[index];
+                    
+                    // 1. Recycle if too far behind player
+                    // Different distances for different layers
+                    const maxDistanceBehind = 300 + (layer * 300); // Increased for reliability
+                    const isTooFarBehind = distanceBehind > maxDistanceBehind;
+                    
+                    // 2. Recycle if too far to sides
+                    const maxSideDistance = 2000 + (playerSpeed * 200); // Increased for reliability
+                    const isTooFarToSides = distanceSquared > (maxSideDistance * maxSideDistance);
+                    
+                    // 3. Time/speed-based recycling chance
+                    // Higher chance at higher speeds and for longer time since last recycle
+                    const recycleChanceFactor = Math.min(3.0, timeSinceRecycle / baseRecycleInterval);
+                    const adjustedRecycleChance = baseRecycleChance * recycleChanceFactor * Math.sqrt(playerSpeed);
+                    const isTimeToRecycle = timeSinceRecycle > baseRecycleInterval && Math.random() < adjustedRecycleChance;
+                    
+                    // TRACK RECYCLING REASONS FOR DEBUGGING
+                    if (isTooFarBehind) farBehindCount++;
+                    if (isTooFarToSides) farSideCount++;
+                    if (isTimeToRecycle) timeRecycledCount++;
+                    
+                    // NEW: Always ensure minimum visible stars directly in front
+                    const lowVisibilityEmergency = visibleCount < 200 && index % 10 === 0;
+                    
+                    // Recycle this star if any condition is met
+                    if (isTooFarBehind || isTooFarToSides || isTimeToRecycle || lowVisibilityEmergency) {
+                        // RELIABLE RECYCLING: Place in front of player in a focused area
+                        
+                        // Base recycle distance - scale with player speed
+                        const minForwardDistance = 500; // Reduced for more visibility
+                        const maxAdditionalDistance = 1000; // Increased for better distribution
+                        const speedScaledDistance = minForwardDistance + 
+                            (Math.random() * maxAdditionalDistance) * Math.sqrt(playerSpeed);
+                        
+                        // Create more variation in the cone angle based on star's layer
+                        const baseAngle = Math.PI / 3; // 60 degrees 
+                        const layerAdjustedAngle = baseAngle * (1.0 - (layer * 0.2));
+                        
+                        // Random angles for position in cone
+                        const randomAngle = (Math.random() * layerAdjustedAngle * 2) - layerAdjustedAngle;
+                        const randomElevation = (Math.random() * layerAdjustedAngle) - (layerAdjustedAngle/2);
+                        
+                        try {
+                            // Create a new direction vector in front of the player
+                            const direction = new THREE.Vector3();
+                            
+                            // Start with forward direction
+                            direction.copy(forwardDirection);
+                            
+                            // Apply rotation around Y axis (horizontal spread)
+                            const rotationY = new THREE.Quaternion();
+                            rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
+                            direction.applyQuaternion(rotationY);
+                            
+                            // Apply rotation around X axis (vertical spread)
+                            const rotationX = new THREE.Quaternion();
+                            rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
+                            direction.applyQuaternion(rotationX);
+                            
+                            // Position star in front of player using the calculated direction and distance
+                            positions[i] = playerMesh.position.x + (direction.x * speedScaledDistance);
+                            positions[i + 1] = playerMesh.position.y + (direction.y * speedScaledDistance);
+                            positions[i + 2] = playerMesh.position.z + (direction.z * speedScaledDistance);
+                        }
+                        catch (err) {
+                            // ULTRA-RELIABLE FALLBACK if quaternion method fails
+                            // Simple positioning directly in front of player
+                            const angle = Math.random() * Math.PI * 2;
+                            const elevationAngle = (Math.random() - 0.5) * Math.PI;
+                            const distance = 800 + Math.random() * 400;
+                            
+                            // Calculate position using simple trig
+                            positions[i] = playerMesh.position.x + Math.sin(angle) * Math.cos(elevationAngle) * distance;
+                            positions[i + 1] = playerMesh.position.y + Math.sin(elevationAngle) * distance;
+                            positions[i + 2] = playerMesh.position.z - Math.cos(angle) * Math.cos(elevationAngle) * distance;
+                        }
+                        
+                        // Update the last recycling time
+                        this.lastStarRecyclingTimes[index] = now;
+                        recycledCount++;
+                    }
+                } catch (err) {
+                    // Don't let a single star error crash the entire update
+                    console.warn(`Error updating star at index ${i}:`, err.message);
                 }
+            }
+            
+            // Force redraw of the starfield
+            this.starfield.geometry.attributes.position.needsUpdate = true;
+            
+            // Log detailed recycling stats occasionally
+            if (Math.random() < 0.01) {
+                console.log(`Stars: Recycled ${recycledCount} (behind: ${farBehindCount}, sides: ${farSideCount}, time: ${timeRecycledCount}), Visible: ${visibleCount}/${positions.length/3} at speed ${playerSpeed.toFixed(1)}`);
+            }
+            
+            // ULTRA-RELIABLE RECOVERY: Emergency star system refresh
+            // If too few stars are visible, trigger emergency recovery
+            const needsEmergencyRecovery = visibleCount < 100;
+            
+            if (needsEmergencyRecovery) {
+                console.warn(`EMERGENCY STARFIELD RECOVERY - only ${visibleCount} visible stars!`);
                 
-                // OPTIMIZED STAR RECYCLING - THREE TRIGGERS FOR RECYCLING:
-                // 1. Star is too far behind player
-                // 2. Star is too far from player position (sideways/above/below)
-                // 3. Time/speed-based recycling for consistent density
-                
-                // Calculate distance from player
-                const dx = positions[i] - playerMesh.position.x;
-                const dy = positions[i + 1] - playerMesh.position.y;
-                const dz = positions[i + 2] - playerMesh.position.z;
-                const distanceSquared = dx*dx + dy*dy + dz*dz;
-                
-                // Calculate distance behind player (positive value = behind player)
-                const distanceBehind = -dotProduct; // Negative dot product = in front, positive = behind
-                
-                // Check time since last recycling for this star
-                const timeSinceRecycle = now - this.lastStarRecyclingTimes[index];
-                
-                // 1. Recycle if too far behind player
-                const maxDistanceBehind = 300 + (layer * 200); // Farther layers stay visible longer
-                const isTooFarBehind = distanceBehind > maxDistanceBehind;
-                
-                // 2. Recycle if too far to sides (uses distance squared for efficiency)
-                const maxSideDistance = 1500 + (playerSpeed * 100); // Higher speeds = larger area
-                const isTooFarToSides = distanceSquared > (maxSideDistance * maxSideDistance);
-                
-                // 3. Time/speed-based recycling chance 
-                const isTimeToRecycle = timeSinceRecycle > adjustedRecycleInterval && Math.random() < adjustedRecycleChance;
-                
-                // Recycle this star if any condition is met
-                if (isTooFarBehind || isTooFarToSides || isTimeToRecycle) {
-                    // ENHANCED RECYCLING: Place in front of player in a focused area
+                // Try aggressive recovery measures
+                if (Math.random() < 0.5) {
+                    // Approach 1: Force recycle a large percentage of stars
+                    const starCount = positions.length / 3;
+                    const recycleCount = Math.min(starCount, 1000);
                     
-                    // Base recycle distance - scale with player speed for better visuals at higher speeds
-                    const minForwardDistance = 700;
-                    const maxAdditionalDistance = 700;
-                    const speedScaledDistance = minForwardDistance + (Math.random() * maxAdditionalDistance) * Math.sqrt(playerSpeed);
-                    
-                    // Create more variation in the cone angle based on star's layer
-                    // Far layer (0) = wider angle, close layer (2) = narrower angle
-                    const baseAngle = Math.PI / 3; // 60 degrees 
-                    const layerAdjustedAngle = baseAngle * (1.0 - (layer * 0.2)); // Reduce angle for closer layers
-                    
-                    // Random angles for position in cone
-                    const randomAngle = (Math.random() * layerAdjustedAngle * 2) - layerAdjustedAngle;
-                    const randomElevation = (Math.random() * layerAdjustedAngle) - (layerAdjustedAngle/2);
-                    
-                    // Start with forward direction
-                    let vx = forwardDirection.x;
-                    let vy = forwardDirection.y;
-                    let vz = forwardDirection.z;
-                    
-                    // Create rotation quaternions
-                    const yAxis = new THREE.Vector3(0, 1, 0);
-                    const xAxis = new THREE.Vector3(1, 0, 0);
-                    
-                    // Get perpendicular to forward for horizontal rotation
-                    const rotationAxis = new THREE.Vector3();
-                    rotationAxis.crossVectors(forwardDirection, yAxis).normalize();
-                    
-                    // Apply rotations using quaternions
-                    const rotationY = new THREE.Quaternion();
-                    rotationY.setFromAxisAngle(yAxis, randomAngle);
-                    
-                    const rotationX = new THREE.Quaternion();
-                    rotationX.setFromAxisAngle(xAxis, randomElevation);
-                    
-                    // Create a vector for the final direction
-                    const direction = new THREE.Vector3(vx, vy, vz);
-                    direction.applyQuaternion(rotationY);
-                    direction.applyQuaternion(rotationX);
-                    
-                    // Position star in front of player using the calculated direction and distance
-                    positions[i] = playerMesh.position.x + (direction.x * speedScaledDistance);
-                    positions[i + 1] = playerMesh.position.y + (direction.y * speedScaledDistance);
-                    positions[i + 2] = playerMesh.position.z + (direction.z * speedScaledDistance);
-                    
-                    // Update the last recycling time
-                    this.lastStarRecyclingTimes[index] = now;
-                    
-                    recycledStars++;
+                    for (let i = 0; i < recycleCount; i++) {
+                        try {
+                            const index = Math.floor(Math.random() * starCount);
+                            if (index < this.lastStarRecyclingTimes.length) {
+                                this.lastStarRecyclingTimes[index] = now - 10000; // Force recycling
+                            }
+                        } catch (err) {
+                            console.error("Error in emergency star recycling:", err);
+                        }
+                    }
+                } else {
+                    // Approach 2: Recreate the entire starfield system
+                    // But only do this rarely to avoid performance issues
+                    try {
+                        console.log("COMPLETE STARFIELD SYSTEM RESET");
+                        this.recreateDynamicStarfield();
+                        this.recreateBackgroundStarfield();
+                        this.lastFullStarRefresh = now;
+                    } catch (err) {
+                        console.error("Failed complete starfield reset:", err);
+                    }
                 }
-            } catch (err) {
-                console.warn(`Error updating star at index ${i}:`, err);
             }
         }
-        
-        // Log recycling stats occasionally
-        if (Math.random() < 0.005) {
-            console.log(`Stars: Recycled ${recycledStars}, Visible ${visibleStars}/${positions.length/3} at speed ${playerSpeed.toFixed(1)}`);
+        catch (err) {
+            console.error("Critical error in updateStarfield:", err);
+            // Try to recover by recreating the starfield, but not on every frame
+            if (Math.random() < 0.2) {
+                try {
+                    console.log("Attempting to recover starfield...");
+                    this.recreateDynamicStarfield();
+                    this.recreateBackgroundStarfield();
+                }
+                catch (recoveryErr) {
+                    console.error("Failed to recover starfield:", recoveryErr);
+                }
+            }
         }
-        
-        // Force redraw of the starfield
-        this.starfield.geometry.attributes.position.needsUpdate = true;
     }
 
     // New method to recreate background starfield if it disappears
     recreateBackgroundStarfield() {
         console.log("Recreating background starfield due to disappearance");
         
-        // Remove old background if it exists
-        if (this.backgroundStarfieldContainer) {
+        try {
+            // Clean up old background starfield
             if (this.backgroundStarfield) {
-                this.backgroundStarfieldContainer.remove(this.backgroundStarfield);
+                if (this.backgroundStarfield.parent) {
+                    this.backgroundStarfield.parent.remove(this.backgroundStarfield);
+                }
+                
+                if (this.backgroundStarfield.geometry) {
+                    this.backgroundStarfield.geometry.dispose();
+                }
+                
+                if (this.backgroundStarfield.material) {
+                    this.backgroundStarfield.material.dispose();
+                }
             }
-            this.scene.remove(this.backgroundStarfieldContainer);
-        }
-        
-        // Create new background starfield
-        const backgroundStarCount = 60000;
-        const backgroundGeometry = new THREE.BufferGeometry();
-        const backgroundPositions = new Float32Array(backgroundStarCount * 3);
-        const backgroundSizes = new Float32Array(backgroundStarCount);
-        const backgroundColors = new Float32Array(backgroundStarCount * 3);
-        
-        // Generate background stars in a full sphere around the camera
-        for (let i = 0; i < backgroundStarCount; i++) {
-            const i3 = i * 3;
-            // Generate positions on a sphere
-            const phi = Math.acos(2 * Math.random() - 1); // Range [0, PI]
-            const theta = 2 * Math.PI * Math.random(); // Range [0, 2PI]
-            const radius = 3000; // Fixed large distance
             
-            // Convert spherical to Cartesian coordinates
-            backgroundPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-            backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-            backgroundPositions[i3 + 2] = radius * Math.cos(phi);
+            if (this.backgroundStarfieldContainer) {
+                if (this.backgroundStarfieldContainer.parent) {
+                    this.backgroundStarfieldContainer.parent.remove(this.backgroundStarfieldContainer);
+                }
+                if (this.scene) {
+                    this.scene.remove(this.backgroundStarfieldContainer);
+                }
+            }
             
-            // Random small sizes for background stars
-            backgroundSizes[i] = Math.random() * 1.8 + 0.7;
+            // Create new background starfield
+            const backgroundStarCount = 15000;
+            const backgroundGeometry = new THREE.BufferGeometry();
+            const backgroundPositions = new Float32Array(backgroundStarCount * 3);
+            const backgroundSizes = new Float32Array(backgroundStarCount);
+            const backgroundColors = new Float32Array(backgroundStarCount * 3);
             
-            // Add color variation
-            const colorChoice = Math.random();
-            if (colorChoice > 0.992) {
-                // Reddish stars (rare)
-                backgroundColors[i3] = 1.0;
-                backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 2] = 0.5 + Math.random() * 0.3;
-            } else if (colorChoice > 0.98) {
-                // Bluish stars (uncommon)
-                backgroundColors[i3] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
-                backgroundColors[i3 + 2] = 1.0;
+            // Generate background stars in a full sphere around the camera
+            for (let i = 0; i < backgroundStarCount; i++) {
+                const i3 = i * 3;
+                
+                // Generate positions on a sphere using better distribution
+                const phi = Math.acos(2 * Math.random() - 1);
+                const theta = 2 * Math.PI * Math.random();
+                const radius = 3000;
+                
+                // Convert to Cartesian coordinates
+                backgroundPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                backgroundPositions[i3 + 2] = radius * Math.cos(phi);
+                
+                // Smaller stars for background
+                backgroundSizes[i] = Math.random() * 1.2 + 0.5;
+                
+                // Add color variation
+                const colorChoice = Math.random();
+                if (colorChoice > 0.992) {
+                    // Reddish
+                    backgroundColors[i3] = 1.0;
+                    backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
+                    backgroundColors[i3 + 2] = 0.5 + Math.random() * 0.3;
+                } else if (colorChoice > 0.98) {
+                    // Bluish
+                    backgroundColors[i3] = 0.5 + Math.random() * 0.3;
+                    backgroundColors[i3 + 1] = 0.5 + Math.random() * 0.3;
+                    backgroundColors[i3 + 2] = 1.0;
+                } else {
+                    // White/yellowish
+                    const brightness = 0.85 + Math.random() * 0.15;
+                    backgroundColors[i3] = brightness;
+                    backgroundColors[i3 + 1] = brightness;
+                    backgroundColors[i3 + 2] = brightness * (0.92 + Math.random() * 0.08);
+                }
+            }
+            
+            backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(backgroundPositions, 3));
+            backgroundGeometry.setAttribute('size', new THREE.BufferAttribute(backgroundSizes, 1));
+            backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
+            
+            // Create material with depth test disabled
+            const backgroundMaterial = new THREE.PointsMaterial({
+                size: 2.0,
+                sizeAttenuation: false,
+                transparent: true,
+                opacity: 0.9,
+                vertexColors: true,
+                vertexSizeAttribute: true,
+                depthTest: false // Disable depth testing to ensure stars are always visible
+            });
+            
+            this.backgroundStarfield = new THREE.Points(backgroundGeometry, backgroundMaterial);
+            this.backgroundStarfield.renderOrder = -1;
+            
+            // Create container and add to scene
+            this.backgroundStarfieldContainer = new THREE.Object3D();
+            this.backgroundStarfieldContainer.add(this.backgroundStarfield);
+            
+            if (this.scene) {
+                this.scene.add(this.backgroundStarfieldContainer);
+                
+                // Position at camera if available
+                if (this.camera) {
+                    this.backgroundStarfieldContainer.position.copy(this.camera.position);
+                }
+                
+                console.log("Successfully recreated background starfield");
             } else {
-                // White/yellowish stars (common)
-                const brightness = 0.85 + Math.random() * 0.15;
-                backgroundColors[i3] = brightness;
-                backgroundColors[i3 + 1] = brightness;
-                backgroundColors[i3 + 2] = brightness * (0.92 + Math.random() * 0.08);
+                console.error("Failed to add background starfield to scene - scene not available");
             }
+        } catch (err) {
+            console.error("Error recreating background starfield:", err);
         }
-        
-        backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(backgroundPositions, 3));
-        backgroundGeometry.setAttribute('size', new THREE.BufferAttribute(backgroundSizes, 1));
-        backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
-        
-        const backgroundMaterial = new THREE.PointsMaterial({
-            size: 2.5,
-            sizeAttenuation: false,
-            transparent: true,
-            opacity: 0.9,
-            vertexColors: true,
-            vertexSizeAttribute: true
-        });
-        
-        this.backgroundStarfield = new THREE.Points(backgroundGeometry, backgroundMaterial);
-        this.backgroundStarfield.renderOrder = -1;
-        
-        // Create a parent object to handle the background starfield
-        this.backgroundStarfieldContainer = new THREE.Object3D();
-        this.backgroundStarfieldContainer.add(this.backgroundStarfield);
-        this.scene.add(this.backgroundStarfieldContainer);
-        
-        // Ensure it's attached to the camera position
-        if (this.camera) {
-            this.backgroundStarfieldContainer.position.copy(this.camera.position);
-        }
-        
-        console.log("Background starfield successfully recreated");
     }
 
     // New method to recreate dynamic starfield if it disappears
     recreateDynamicStarfield() {
         console.log("Recreating dynamic starfield due to disappearance");
         
-        // Remove old starfield if it exists
-        if (this.starfield) {
-            this.scene.remove(this.starfield);
-        }
-        
-        // Create new dynamic starfield
-        const dynamicStarCount = 8000;
-        const starGeometry = new THREE.BufferGeometry();
-        const starPositions = new Float32Array(dynamicStarCount * 3);
-        const starSpeeds = new Float32Array(dynamicStarCount);
-        const starSizes = new Float32Array(dynamicStarCount);
-        const starLayerValues = new Float32Array(dynamicStarCount);
-        const starColors = new Float32Array(dynamicStarCount * 3);
-        
-        // Get player position if available
-        let playerPos = new THREE.Vector3(0, 0, 0);
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        if (this.playerMeshes && this.playerMeshes.get(playerId)) {
-            playerPos = this.playerMeshes.get(playerId).position.clone();
-        }
-        
-        for (let i = 0; i < dynamicStarCount; i++) {
-            const i3 = i * 3;
-            
-            // Position stars around player
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            const radius = 200 + Math.random() * 1800;
-            
-            starPositions[i3] = playerPos.x + radius * Math.sin(phi) * Math.cos(theta);
-            starPositions[i3 + 1] = playerPos.y + radius * Math.sin(phi) * Math.sin(theta);
-            starPositions[i3 + 2] = playerPos.z + radius * Math.cos(phi);
-            
-            starSpeeds[i] = Math.random() * 1.8 + 0.7;
-            starSizes[i] = Math.random() * 3.0 + 1.5;
-            starLayerValues[i] = Math.floor(Math.random() * 3);
-            
-            // Add color variation
-            const colorChoice = Math.random();
-            if (colorChoice > 0.97) {
-                // Reddish stars (rare)
-                starColors[i3] = 1.0;
-                starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 2] = 0.6 + Math.random() * 0.2;
-            } else if (colorChoice > 0.94) {
-                // Bluish stars (uncommon)
-                starColors[i3] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
-                starColors[i3 + 2] = 1.0;
-            } else {
-                // White/yellowish stars (common)
-                const brightness = 0.9 + Math.random() * 0.1;
-                starColors[i3] = brightness;
-                starColors[i3 + 1] = brightness;
-                starColors[i3 + 2] = brightness * (0.95 + Math.random() * 0.05);
+        try {
+            // Remove old starfield if it exists
+            if (this.starfield) {
+                if (this.starfield.parent) {
+                    this.starfield.parent.remove(this.starfield);
+                }
+                if (this.scene) {
+                    this.scene.remove(this.starfield);
+                }
+                
+                // Proper cleanup of geometry and materials
+                if (this.starfield.geometry) {
+                    this.starfield.geometry.dispose();
+                }
+                if (this.starfield.material) {
+                    this.starfield.material.dispose();
+                }
             }
+            
+            // Create new foreground dynamic starfield
+            const dynamicStarCount = 2000;
+            const starGeometry = new THREE.BufferGeometry();
+            const starPositions = new Float32Array(dynamicStarCount * 3);
+            const starSpeeds = new Float32Array(dynamicStarCount);
+            const starSizes = new Float32Array(dynamicStarCount);
+            const starLayerValues = new Float32Array(dynamicStarCount);
+            const starColors = new Float32Array(dynamicStarCount * 3);
+            
+            // Get player position if available
+            let playerPos = new THREE.Vector3(0, 0, 0);
+            let playerForward = new THREE.Vector3(0, 0, -1);
+            
+            if (this.camera) {
+                playerPos.copy(this.camera.position);
+                playerForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+            }
+            
+            // Initialize new recycling times
+            this.lastStarRecyclingTimes = new Float32Array(dynamicStarCount);
+            const now = Date.now();
+            
+            // Create stars more concentrated in front of the camera
+            for (let i = 0; i < dynamicStarCount; i++) {
+                const i3 = i * 3;
+                
+                // Random position in a cone in front of the player
+                const coneAngle = Math.PI / 2; // 90 degrees cone
+                const randomAngle = (Math.random() * coneAngle * 2) - coneAngle;
+                const randomElevation = (Math.random() * coneAngle) - (coneAngle/2);
+                
+                // Random distance, biased toward closer stars
+                const distance = 200 + Math.pow(Math.random(), 0.7) * 1800;
+                
+                // Starting with forward vector
+                let direction = new THREE.Vector3();
+                direction.copy(playerForward);
+                
+                // Apply rotations
+                const rotationY = new THREE.Quaternion();
+                rotationY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomAngle);
+                direction.applyQuaternion(rotationY);
+                
+                const rotationX = new THREE.Quaternion();
+                rotationX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), randomElevation);
+                direction.applyQuaternion(rotationX);
+                
+                // Set star position
+                starPositions[i3] = playerPos.x + direction.x * distance;
+                starPositions[i3 + 1] = playerPos.y + direction.y * distance;
+                starPositions[i3 + 2] = playerPos.z + direction.z * distance;
+                
+                // Initialize properties
+                this.lastStarRecyclingTimes[i] = now - Math.random() * 5000;
+                starSpeeds[i] = Math.random() * 1.5 + 0.8;
+                starSizes[i] = Math.random() * 2.0 + 1.0;
+                
+                // Distribute layers evenly
+                if (i < dynamicStarCount * 0.4) {
+                    starLayerValues[i] = 2; // 40% close layer
+                } else if (i < dynamicStarCount * 0.7) {
+                    starLayerValues[i] = 1; // 30% middle layer
+                } else {
+                    starLayerValues[i] = 0; // 30% far layer
+                }
+                
+                // Add color variation
+                const colorChoice = Math.random();
+                if (colorChoice > 0.97) {
+                    // Reddish stars
+                    starColors[i3] = 1.0;
+                    starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
+                    starColors[i3 + 2] = 0.6 + Math.random() * 0.2;
+                } else if (colorChoice > 0.94) {
+                    // Bluish stars
+                    starColors[i3] = 0.6 + Math.random() * 0.2;
+                    starColors[i3 + 1] = 0.6 + Math.random() * 0.2;
+                    starColors[i3 + 2] = 1.0;
+                } else {
+                    // White/yellowish stars
+                    const brightness = 0.9 + Math.random() * 0.1;
+                    starColors[i3] = brightness;
+                    starColors[i3 + 1] = brightness;
+                    starColors[i3 + 2] = brightness * (0.95 + Math.random() * 0.05);
+                }
+            }
+            
+            // Set attributes
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+            starGeometry.setAttribute('layerValue', new THREE.BufferAttribute(starLayerValues, 1));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+            
+            // Create material with depth testing disabled for better visibility
+            const starMaterial = new THREE.PointsMaterial({
+                size: 2.0,
+                sizeAttenuation: true,
+                transparent: true,
+                opacity: 1.0,
+                vertexColors: true,
+                vertexSizeAttribute: true,
+                depthTest: false // Disable depth testing for stars to always be visible
+            });
+            
+            // Create starfield
+            this.starfield = new THREE.Points(starGeometry, starMaterial);
+            this.starfield.speeds = starSpeeds;
+            this.starfield.layerValues = starLayerValues;
+            this.starfield.lastPlayerPosition = new THREE.Vector3();
+            this.starfield.renderOrder = 0;
+            
+            // Make sure to add it to the scene
+            if (this.scene) {
+                this.scene.add(this.starfield);
+                console.log("Successfully recreated dynamic starfield with improved reliability");
+            } else {
+                console.error("Failed to add starfield to scene - scene not available");
+            }
+            
+            // Store reference position
+            if (!this.startPlayerPosition) {
+                this.startPlayerPosition = playerPos.clone();
+            }
+            
+            // Reset last refresh time
+            this.lastFullStarRefresh = now;
+            
+        } catch (err) {
+            console.error("Error recreating dynamic starfield:", err);
         }
-        
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-        starGeometry.setAttribute('layerValue', new THREE.BufferAttribute(starLayerValues, 1));
-        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-        
-        const starMaterial = new THREE.PointsMaterial({
-            size: 3.0,
-            sizeAttenuation: true,
-            transparent: true,
-            opacity: 1.0,
-            vertexColors: true,
-            vertexSizeAttribute: true
-        });
-        
-        this.starfield = new THREE.Points(starGeometry, starMaterial);
-        this.starfield.speeds = starSpeeds;
-        this.starfield.layerValues = starLayerValues;
-        this.starfield.lastPlayerPosition = new THREE.Vector3();
-        this.starfield.renderOrder = 0;
-        this.scene.add(this.starfield);
-        
-        // Reset the reference point
-        if (this.playerMeshes && this.playerMeshes.get(playerId)) {
-            this.startPlayerPosition = this.playerMeshes.get(playerId).position.clone();
-        } else {
-            this.startPlayerPosition = new THREE.Vector3(0, 0, 0);
-        }
-        
-        console.log("Dynamic starfield successfully recreated");
     }
 
     // New method to partially reset the starfield to maintain consistent density
@@ -3183,100 +3497,132 @@ class GameClient {
     animate() {
         requestAnimationFrame(() => this.animate());
 
-        // Update movement before other updates
+        // Check if the player is eliminated (game over)
+        const isGameOver = this.localPlayer && this.localPlayer.eliminated;
+        
+        // Always update movement for camera controls, but with reduced functionality if game over
         this.updateMovement();
-    
-    // Update distance based on time (do this in every frame)
-    this.updateDistanceBasedOnTime();
+        
+        // Always update distance based on time (unless game over)
+        if (!isGameOver) {
+            this.updateDistanceBasedOnTime();
+        }
 
-        // Only update game elements if the game is running
-    if (this.gameState.isRunning) {
-        // Update starfield
+        // ALWAYS update starfield regardless of game state for visual continuity
         this.updateStarfield();
-
-        // Update asteroids
-        this.updateAsteroids();
         
-        // MODIFIED ASTEROID DENSITY MANAGEMENT
-        // Get player speed
-        let playerSpeed = 1.0;
-        if (this.controls && this.controls.baseSpeed) {
-            playerSpeed = this.controls.baseSpeed;
-        }
-        
-        // Ensure difficulty level is initialized
-        if (!this.difficultyLevel) {
-            this.difficultyLevel = 1;
-        }
-        
-        // Calculate minimum asteroid count based on player speed
-        const minBaseCount = 20; // Minimum number of asteroids regardless of speed
-        const speedBonusCount = Math.floor(playerSpeed * 2); // 2 more asteroids per speed unit
-        const difficultyBonusCount = this.difficultyLevel * 2; // 2 more asteroids per difficulty level
-        
-        // Ensure this many asteroids are always present
-        const guaranteedCount = minBaseCount + speedBonusCount + difficultyBonusCount;
-        
-        // Track how many asteroids are active
-        const activeCount = this.asteroids ? this.asteroids.length : 0;
-        
-        // Always maintain a minimum number of asteroids
-        if (activeCount < guaranteedCount) {
-            // Calculate how many to spawn this frame
-            const neededCount = guaranteedCount - activeCount;
-            const spawnThisFrame = Math.min(3, neededCount); // Up to 3 per frame
+        // Only update game elements if the game is running and not game over
+        if (this.gameState.isRunning && !isGameOver) {
+            // Update asteroids
+            this.updateAsteroids();
             
-            console.log(`Spawning ${spawnThisFrame} asteroids (currently have ${activeCount}/${guaranteedCount})`);
+            // IMPROVED ASTEROID DENSITY MANAGEMENT
+            // Get player speed
+            let playerSpeed = 1.0;
+            if (this.controls && this.controls.baseSpeed) {
+                playerSpeed = this.controls.baseSpeed;
+            }
             
-            // Always spawn directly in path for better visibility
-            for (let i = 0; i < spawnThisFrame; i++) {
-                // 70% chance to spawn directly in player's path for challenge
-                const inPath = Math.random() < 0.7;
-                const asteroid = this.spawnAsteroid(!inPath);
+            // Ensure difficulty level is initialized
+            if (!this.difficultyLevel) {
+                this.difficultyLevel = 1;
+            }
+            
+            // Calculate minimum asteroid count based on player speed - INCREASED
+            const minBaseCount = 25; // Increased from 20
+            const speedBonusCount = Math.floor(playerSpeed * 3); // Increased from 2
+            const difficultyBonusCount = this.difficultyLevel * 3; // Increased from 2
+            
+            // More asteroids at higher distances
+            const distanceBonus = Math.floor(this.localPlayer.distanceTraveled / 1000) * 5;
+            
+            // Ensure this many asteroids are always present
+            const guaranteedCount = minBaseCount + speedBonusCount + difficultyBonusCount + distanceBonus;
+            
+            // Track how many asteroids are active
+            const activeCount = this.asteroids ? this.asteroids.length : 0;
+            
+            // Calculate hunter asteroid limit - more hunters at higher difficulties
+            const maxHunterCount = Math.min(5, Math.floor(this.difficultyLevel / 2) + 1);
+            
+            // Count current hunter asteroids
+            let hunterCount = 0;
+            if (this.asteroids) {
+                hunterCount = this.asteroids.filter(ast => ast.isHunter).length;
+            }
+            
+            // Always maintain a minimum number of asteroids
+            if (activeCount < guaranteedCount) {
+                // Calculate how many to spawn this frame - INCREASE for faster spawning
+                const neededCount = guaranteedCount - activeCount;
+                const spawnThisFrame = Math.min(4, neededCount); // Up to 4 per frame (increased from 3)
                 
-                // Force a spawn in a clearly visible location if spawning failed
-                if (!asteroid && i === 0) {
-                    // Create a fallback spawn at a very visible position
-                    this.spawnEmergencyAsteroid();
+                // Reduce logging to avoid console spam
+                if (Math.random() < 0.2) {
+                    console.log(`Spawning ${spawnThisFrame} asteroids (currently have ${activeCount}/${guaranteedCount})`);
                 }
+                
+                // Spawn asteroids with a mix of types
+                for (let i = 0; i < spawnThisFrame; i++) {
+                    let asteroid;
+                    
+                    // Decide if we should try to spawn a hunter
+                    const needMoreHunters = hunterCount < maxHunterCount;
+                    const shouldSpawnHunter = needMoreHunters && Math.random() < 0.2; // 20% chance when possible
+                    
+                    if (shouldSpawnHunter) {
+                        // Force a hunter asteroid - will be handled in spawnAsteroid based on chance
+                        asteroid = this.spawnAsteroid(false);
+                        hunterCount++;
+                    } else {
+                        // 60% chance to spawn directly in player's path for standard asteroids
+                        const inPath = Math.random() < 0.6;
+                        asteroid = this.spawnAsteroid(!inPath);
+                    }
+                    
+                    // Force a spawn in a clearly visible location if spawning failed
+                    if (!asteroid && i === 0) {
+                        // Create a fallback spawn at a very visible position
+                        this.spawnEmergencyAsteroid();
+                    }
+                }
+            }
+
+            // Update projectiles
+            this.projectiles.forEach(projectile => {
+                projectile.mesh.position.add(projectile.velocity);
+            });
+
+            // Update enemies
+            this.gameState.enemies.forEach(enemy => {
+                if (!enemy.model) return;
+                
+                // Move towards center
+                const direction = new THREE.Vector3();
+                direction.subVectors(new THREE.Vector3(0, 0, 0), enemy.model.position);
+                direction.normalize();
+                
+                enemy.model.position.add(direction.multiplyScalar(enemy.speed));
+                enemy.model.lookAt(0, 0, 0);
+            });
+
+            // Spawn new enemies periodically
+            if (Math.random() < 0.005) {
+                this.spawnEnemyShip();
+            }
+
+            // Check for collisions
+            this.checkCollisions();
+            
+            // Periodically clean up distant asteroids to maintain performance
+            if (Math.random() < 0.05) { // ~3 times per second
+                this.cleanupAsteroids();
             }
         }
 
-        // Update projectiles
-        this.projectiles.forEach(projectile => {
-            projectile.mesh.position.add(projectile.velocity);
-        });
-
-        // Update enemies
-        this.gameState.enemies.forEach(enemy => {
-            if (!enemy.model) return;
-            
-            // Move towards center
-            const direction = new THREE.Vector3();
-            direction.subVectors(new THREE.Vector3(0, 0, 0), enemy.model.position);
-            direction.normalize();
-            
-            enemy.model.position.add(direction.multiplyScalar(enemy.speed));
-            enemy.model.lookAt(0, 0, 0);
-        });
-
-        // Spawn new enemies periodically
-        if (Math.random() < 0.005) {
-            this.spawnEnemyShip();
-        }
-
-        // Check for collisions
-        this.checkCollisions();
-        
-        // Periodically clean up distant asteroids to maintain performance
-        if (Math.random() < 0.05) { // ~3 times per second
-            this.cleanupAsteroids();
-        }
+        // Render scene
+        this.renderer.render(this.scene, this.camera);
     }
-
-    // Render scene
-    this.renderer.render(this.scene, this.camera);
-}
 
     async loadModels() {
         const loader = new GLTFLoader();
