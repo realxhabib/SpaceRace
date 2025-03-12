@@ -272,31 +272,44 @@ function isPortInUse(port) {
   });
 }
 
+// Helper function to find an available port, starting from the provided one
+async function findAvailablePort(startPort = 3000, maxAttempts = 20) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const port = startPort + attempt;
+    const inUse = await isPortInUse(port);
+    if (!inUse) {
+      return port;
+    }
+  }
+  throw new Error(`Could not find an available port after ${maxAttempts} attempts.`);
+}
+
 // Start server on an available port
 async function startServer(initialPort = 3000) {
-  // First, kill any previous server processes
-  await killPreviousServerProcesses();
-  
-  let port = initialPort;
-  let attempts = 0;
-  const maxAttempts = 10;
-  
-  while (attempts < maxAttempts) {
-    const inUse = await isPortInUse(port);
-    
-    if (!inUse) {
-      server.listen(port, () => {
-        console.log(`Server running on http://localhost:${port}`);
-      });
-      return;
-    }
-    
-    console.log(`Port ${port} is already in use, trying port ${port + 1}`);
-    port++;
-    attempts++;
+  // Only kill previous processes if we're not launching multiple servers
+  if (!process.env.ALLOW_MULTIPLE_SERVERS) {
+    // First, kill any previous server processes
+    await killPreviousServerProcesses();
+  } else {
+    console.log('Multiple server mode enabled - skipping process termination');
   }
   
-  console.error(`Could not find an available port after ${maxAttempts} attempts.`);
+  try {
+    // Find an available port
+    const port = await findAvailablePort(initialPort);
+    
+    server.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}`);
+      
+      if (process.env.ALLOW_MULTIPLE_SERVERS) {
+        console.log('This is an additional server instance. Players connecting to this server');
+        console.log('will be in a separate game from players on other servers.');
+      }
+    });
+  } catch (error) {
+    console.error(`Error starting server: ${error.message}`);
+    console.error(`Could not find an available port. Please check if you have too many servers running.`);
+  }
 }
 
 // Start the server on an available port
