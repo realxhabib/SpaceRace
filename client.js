@@ -60,7 +60,7 @@ class GameClient {
             baseSpeed: 0.4,
             boostMultiplier: 1.8,
             verticalSpeed: 0.5,
-            horizontalSpeed: 0.5,
+            horizontalSpeed: 1.2, // Increased from 0.8 to 1.2 for even more responsive left/right movement
             currentSpeed: 0.4,
             // Mouse control properties - disabled as requested
             mouseEnabled: false, // Changed from true to false
@@ -1625,9 +1625,9 @@ class GameClient {
             rotZ = -0.5; // Tilt right
         }
 
-        // Apply lateral movement directly without boundary checking
-            playerMesh.position.x += moveX;
-            playerMesh.position.y += moveY;
+        // Apply lateral movement with smooth transitions to prevent jerky movement
+        playerMesh.position.x = THREE.MathUtils.lerp(playerMesh.position.x, playerMesh.position.x + moveX, 0.85); // Increased from 0.7 to 0.85 for quicker response
+        playerMesh.position.y = THREE.MathUtils.lerp(playerMesh.position.y, playerMesh.position.y + moveY, 0.7);
         
         // Apply rotation with smooth transitions
         playerMesh.rotation.x = THREE.MathUtils.lerp(playerMesh.rotation.x, rotX, 0.05);
