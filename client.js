@@ -1848,11 +1848,54 @@ class GameClient {
 
     // Single, consolidated updateStarfield method
     updateStarfield() {
-        // THIS IS THE ONLY VALID IMPLEMENTATION
-        // DEFINED NEAR THE END OF THE CLASS
-        // If you see this implementation, it will be overridden by the one defined later
-        console.log("Using definitive starfield implementation defined later in the class");
-        return;
+        // Initialize starfield if possible and not already done
+        if (!this.starfield && this.models && this.models.starfield) {
+            console.log("Starfield model now available, initializing");
+            this.createDynamicStarfield();
+            return;
+        }
+        
+        // Exit if no starfield created yet
+        if (!this.starfieldGroup) return;
+        
+        // Get player mesh with safety checks
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        if (!playerId) return;
+        
+        const playerMesh = this.playerMeshes?.get(playerId);
+        if (!playerMesh) return;
+        
+        // Position starfield group at player position
+        this.starfieldGroup.position.copy(playerMesh.position);
+        
+        // Get current boost state
+        const isBoosting = this.controls?.boost || false;
+        
+        // Get player's forward direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        forwardDirection.applyQuaternion(playerMesh.quaternion);
+        
+        // Create rotation matrix for alignment
+        const matrix = new THREE.Matrix4();
+        matrix.lookAt(
+            new THREE.Vector3(0, 0, 0),
+            forwardDirection,
+            new THREE.Vector3(0, 1, 0)
+        );
+        
+        // Apply rotation to the entire group
+        this.starfieldGroup.quaternion.setFromRotationMatrix(matrix);
+        
+        // Enhance hyperspeed effect when boosting
+        if (this.hyperspeedEffect && this.hyperspeedEffect.material) {
+            if (isBoosting) {
+                this.hyperspeedEffect.material.opacity = 0.9;
+                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+            } else {
+                this.hyperspeedEffect.material.opacity = 0.7;
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
+            }
+        }
     }
     
     // Method to regenerate stars only ahead of the player
@@ -3943,9 +3986,9 @@ class GameClient {
                                      this.cameraDistance + zoomDelta));
     }
 
-    // Creates a fixed starfield in absolute world coordinates
+    // Creates starfield using only the 3D model
     createDynamicStarfield() {
-        console.log("Creating absolute fixed starfield with proper movement effect");
+        console.log("Creating starfield using ONLY the 3D model");
         
         // Clean up any existing starfield elements
         if (this.starfield) {
@@ -3969,14 +4012,14 @@ class GameClient {
             this.staticStarfield = null;
         }
         
-        // Initialize loading of starfield model for hyperspeed effect
+        // Check if model is loaded
         if (!this.models || !this.models.starfield) {
             console.log("Starfield model not yet loaded, will initialize when model becomes available");
             return;
         }
             
-        // Find meshes in the model for hyperspeed effect
-        console.log("Examining starfield model structure");
+        // Examine the model structure
+        console.log("Using starfield model for all visual effects");
         let meshCount = 0;
         const meshes = [];
         
@@ -3988,124 +4031,116 @@ class GameClient {
             }
         });
         
-        // Create the persistent hyperspeed effect using the model
-        let hyperspeedGeometry = null;
-        if (meshes.length > 1) {
-            hyperspeedGeometry = meshes[1].geometry.clone();
-            console.log("Using second mesh for hyperspeed effect:", meshes[1].name);
-        } else if (meshes.length > 0) {
-            hyperspeedGeometry = meshes[0].geometry.clone();
-            console.log("Using first mesh for hyperspeed effect:", meshes[0].name);
-        } else {
-            // Fallback cylinder
-            hyperspeedGeometry = new THREE.CylinderGeometry(100, 200, 2000, 32, 1, true);
-            console.log("Using fallback cylinder for hyperspeed effect");
+        if (meshes.length === 0) {
+            console.error("No meshes found in starfield model!");
+            return;
         }
         
-        // Create a glowing material for the hyperspeed effect
-        const hyperspeedMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00bbff,
-            transparent: true,
-            opacity: 0.7,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            depthTest: false
+        // Create a model group to hold all starfield elements
+        const starfieldGroup = new THREE.Group();
+        
+        // Process each mesh in the model
+        meshes.forEach((mesh, index) => {
+            // Clone the geometry
+            const geometry = mesh.geometry.clone();
+            
+            // Create appropriate material based on the mesh index
+            let material;
+            
+            if (index === 0 || meshes.length === 1) {
+                // First mesh or only mesh - use for starfield
+                material = new THREE.MeshBasicMaterial({
+                    color: 0x000000, // Black starfield
+                    transparent: true,
+                    opacity: 0, // 0% opacity
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                    depthTest: false
+                });
+                
+                // Create the starfield from this mesh
+                this.starfield = new THREE.Mesh(geometry, material);
+                this.starfield.scale.set(75, 75, 75); // Large scale to surround player
+                starfieldGroup.add(this.starfield);
+                console.log(`Created starfield from mesh ${index + 1}`);
+                
+            } else if (index === 1) {
+                // Second mesh - use for hyperspeed effect
+                material = new THREE.MeshBasicMaterial({
+                    color: 0x00bbff,
+                    transparent: true,
+                    opacity: 0.7,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                    depthTest: false
+                });
+                
+                // Create the hyperspeed effect
+                this.hyperspeedEffect = new THREE.Mesh(geometry, material);
+                this.hyperspeedEffect.scale.set(20, 20, 20);
+                this.hyperspeedEffect.visible = true;
+                starfieldGroup.add(this.hyperspeedEffect);
+                console.log(`Created hyperspeed effect from mesh ${index + 1}`);
+            }
         });
         
-        // Create the hyperspeed mesh that follows the player
-        this.hyperspeedEffect = new THREE.Mesh(hyperspeedGeometry, hyperspeedMaterial);
-        this.hyperspeedEffect.scale.set(20, 20, 20);
-        this.hyperspeedEffect.position.set(0, 0, 0);
-        this.hyperspeedEffect.visible = true;
-        this.scene.add(this.hyperspeedEffect);
+        // Add the group to the scene
+        this.scene.add(starfieldGroup);
+        this.starfieldGroup = starfieldGroup;
         
-        // Create stars in absolute world space - completely independent
-        const absoluteStarfield = new THREE.Group();
-        this.staticStarfield = absoluteStarfield;
-        
-        const worldSize = 50000;
-        const numStars = 100000; // More stars for better effect
-        
-        console.log("Creating", numStars, "fixed stars in absolute world space");
-        
-        for (let i = 0; i < numStars; i++) {
-            // Position in absolute world space
-            let x, y, z;
-            
-            // Distribute stars with more along common travel paths
-            if (i % 4 === 0) { // 25% of stars
-                // Central play corridor
-                x = (Math.random() - 0.5) * 10000;
-                y = (Math.random() - 0.5) * 10000;
-                z = (Math.random() - 0.5) * 40000;
-            } else {
-                // Uniform distribution
-                x = (Math.random() - 0.5) * worldSize;
-                y = (Math.random() - 0.5) * worldSize;
-                z = (Math.random() - 0.5) * worldSize;
-            }
-            
-            // Star size
-            let size;
-            const sizeRand = Math.random();
-            if (sizeRand > 0.98) {
-                size = 6 + Math.random() * 4; // Very large stars (2%)
-            } else if (sizeRand > 0.95) {
-                size = 4 + Math.random() * 2; // Large stars (3%)
-            } else if (sizeRand > 0.85) {
-                size = 2 + Math.random() * 2; // Medium stars (10%)
-            } else if (sizeRand > 0.6) {
-                size = 1 + Math.random() * 1; // Small-medium stars (25%)
-            } else {
-                size = 0.5 + Math.random() * 0.5; // Small stars (60%)
-            }
-            
-            // Simplified geometry for performance
-            const segments = size > 4 ? 8 : (size > 2 ? 6 : 4);
-            const geometry = new THREE.SphereGeometry(size, segments, segments);
-            
-            // Varied brightness
-            const brightness = 0.6 + Math.random() * 0.4;
-            
-            // Varied colors
-            let color;
-            const colorRand = Math.random();
-            if (colorRand > 0.97) {
-                color = 0xff5050; // Bright red (3%)
-            } else if (colorRand > 0.94) {
-                color = 0xff8080; // Light red (3%)
-            } else if (colorRand > 0.90) {
-                color = 0x8080ff; // Blue (4%)
-            } else if (colorRand > 0.85) {
-                color = 0xffff80; // Yellow (5%)
-            } else if (colorRand > 0.80) {
-                color = 0xb0b0ff; // Light blue (5%)
-            } else {
-                color = 0xffffff; // White (80%)
-            }
-            
-            // Create material
-            const material = new THREE.MeshBasicMaterial({
-                color: color,
-                transparent: true,
-                opacity: brightness,
-                depthWrite: false,
-                depthTest: false
-            });
-            
-            // Create and position the star in ABSOLUTE world coordinates
-            const star = new THREE.Mesh(geometry, material);
-            star.position.set(x, y, z);
-            this.staticStarfield.add(star);
+        console.log("Starfield created using only the 3D model");
+    }
+
+    // Update starfield and hyperspeed effect positions
+    updateStarfield() {
+        // Initialize starfield if possible and not already done
+        if (!this.starfield && this.models && this.models.starfield) {
+            console.log("Starfield model now available, initializing");
+            this.createDynamicStarfield();
+            return;
         }
         
-        // Add starfield directly to scene - not attached to any other object
-        this.scene.add(this.staticStarfield);
+        // Exit if no starfield created yet
+        if (!this.starfieldGroup) return;
         
-        // Mark as static world object
-        this.staticStarfield.userData.isStaticWorldObject = true;
+        // Get player mesh with safety checks
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        if (!playerId) return;
         
-        console.log("Fixed starfield created - stars will appear to move opposite to ship direction");
+        const playerMesh = this.playerMeshes?.get(playerId);
+        if (!playerMesh) return;
+        
+        // Position starfield group at player position
+        this.starfieldGroup.position.copy(playerMesh.position);
+        
+        // Get current boost state
+        const isBoosting = this.controls?.boost || false;
+        
+        // Get player's forward direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        forwardDirection.applyQuaternion(playerMesh.quaternion);
+        
+        // Create rotation matrix for alignment
+        const matrix = new THREE.Matrix4();
+        matrix.lookAt(
+            new THREE.Vector3(0, 0, 0),
+            forwardDirection,
+            new THREE.Vector3(0, 1, 0)
+        );
+        
+        // Apply rotation to the entire group
+        this.starfieldGroup.quaternion.setFromRotationMatrix(matrix);
+        
+        // Enhance hyperspeed effect when boosting
+        if (this.hyperspeedEffect && this.hyperspeedEffect.material) {
+            if (isBoosting) {
+                this.hyperspeedEffect.material.opacity = 0.9;
+                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+            } else {
+                this.hyperspeedEffect.material.opacity = 0.7;
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
+            }
+        }
     }
 }
 
