@@ -1355,11 +1355,17 @@ class GameClient {
                 }
                 
                 // Check if out of range (too far from player)
-                // Use a larger distance for hunters so they can track from further away
-                const maxDistance = asteroid.isHunter ? 
-                    (3000 + (playerSpeed * 300)) : // Hunters stay visible longer
-                    (2000 + (playerSpeed * 200));  // Regular asteroids
-                    
+                // Modified formula to scale better at high distances (70,000+)
+                // Add exponential scaling based on player distance and speed
+                const playerDistance = this.localPlayer?.distanceTraveled || 0;
+                const distanceScaleFactor = Math.min(5, 1 + (playerDistance / 20000)); // Max 5x scaling at 80,000+ distance
+                const baseMaxDistance = asteroid.isHunter ? 3000 : 2000;
+                const speedScaling = asteroid.isHunter ? 
+                    (playerSpeed * 350) : // Hunters scale even better with speed
+                    (playerSpeed * 300);  // Regular asteroids - increased from 200 to 300
+                
+                const maxDistance = (baseMaxDistance + speedScaling) * distanceScaleFactor;
+                
                 if (distance > maxDistance && !asteroid.isEmergency) {
                     // Return asteroid to pool and remove from active list
                     this.returnAsteroidToPool(asteroid);
@@ -1384,6 +1390,8 @@ class GameClient {
     }
 
     handleAsteroidCollision(asteroid) {
+        // This method handles collisions between asteroids and the player's ship (not the camera)
+        
         // Reduced cooldown from 200ms to 150ms for more responsive collisions
         if (!this.localPlayer.lastCollisionTime || 
             Date.now() - this.localPlayer.lastCollisionTime > 150) {
@@ -1890,7 +1898,7 @@ class GameClient {
         if (this.hyperspeedEffect && this.hyperspeedEffect.material) {
             if (isBoosting) {
                 this.hyperspeedEffect.material.opacity = 0.9;
-                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
             } else {
                 this.hyperspeedEffect.material.opacity = 0.7;
                 this.hyperspeedEffect.material.color.setHex(0x00bbff);
@@ -2684,6 +2692,9 @@ class GameClient {
 
     checkCollisions() {
         // Check projectile collisions with enemies
+        // This method ensures collisions are detected between projectiles and enemies
+        // Note: Asteroid collisions with the player ship are handled in updateAsteroids
+        
         this.projectiles.forEach(projectile => {
             this.gameState.enemies.forEach((enemy, index) => {
                 if (!enemy.model) return;
@@ -3756,7 +3767,7 @@ class GameClient {
             return;
         }
 
-        // Get current player position
+        // Get current player position - this is the ship's position, not the camera
         const playerPos = playerMesh.position;
         const collisionResults = [];
         
@@ -3821,21 +3832,33 @@ class GameClient {
                 asteroid.mesh.rotation.z += asteroid.rotationSpeed.z;
             }
             
-            // Calculate distance from player
+            // Calculate distance from player ship (not camera)
             const distance = asteroid.mesh.position.distanceTo(playerPos);
             
-            // Close enough for collision?
+            // Close enough for collision with the ship? (not the camera)
             const collisionThreshold = 10 + (asteroid.size || 1) * 0.7;
             if (distance < collisionThreshold) {
                 collisionResults.push(asteroid);
             }
             
             // Check if out of range (too far from player)
-            const maxDistance = 2000 + (playerSpeed * 200);
+            // Modified formula to scale better at high distances (70,000+)
+            const playerDistance = this.localPlayer?.distanceTraveled || 0;
+            const distanceScaleFactor = Math.min(5, 1 + (playerDistance / 20000)); // Max 5x scaling at 80,000+ distance
+            
+            // Use a larger distance for hunters so they can track from further away
+            const baseMaxDistance = asteroid.isHunter ? 3000 : 2000;
+            const speedScaling = asteroid.isHunter ? 
+                (playerSpeed * 350) : // Hunters scale even better with speed
+                (playerSpeed * 300);  // Regular asteroids - increased from 200 to 300
+            
+            const maxDistance = (baseMaxDistance + speedScaling) * distanceScaleFactor;
+            
             if (distance > maxDistance && !asteroid.isEmergency) {
                 // Return asteroid to pool and remove from active list
                 this.returnAsteroidToPool(asteroid);
                 this.asteroids.splice(i, 1);
+                i--; // Adjust index after removal
             }
         }
         
@@ -3904,7 +3927,7 @@ class GameClient {
         if (this.hyperspeedEffect.material) {
             if (isBoosting) {
                 this.hyperspeedEffect.material.opacity = 0.9;
-                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
             } else {
                 this.hyperspeedEffect.material.opacity = 0.7;
                 this.hyperspeedEffect.material.color.setHex(0x00bbff);
@@ -4071,7 +4094,7 @@ class GameClient {
             } else if (index === 1) {
                 // Second mesh - use for hyperspeed effect
                 material = new THREE.MeshBasicMaterial({
-                    color: 0x00bbff,
+                    color: 0x000000,
                     transparent: true,
                     opacity: 0.7,
                     side: THREE.DoubleSide,
@@ -4146,7 +4169,7 @@ class GameClient {
         if (this.hyperspeedEffect && this.hyperspeedEffect.material) {
             if (isBoosting) {
                 this.hyperspeedEffect.material.opacity = 0.9;
-                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
             } else {
                 this.hyperspeedEffect.material.opacity = 0.7;
                 this.hyperspeedEffect.material.color.setHex(0x00bbff);
