@@ -3865,9 +3865,9 @@ class GameClient {
         if (!this.staticStarfield && this.models && this.models.starfield) {
             console.log("Starfield model now available, initializing");
             this.createDynamicStarfield();
-            return;
-        }
-        
+                    return;
+                }
+                
         // IMPORTANT: Only update the hyperspeed effect
         // The stars must remain completely static in world space
         if (!this.hyperspeedEffect) {
@@ -4055,12 +4055,16 @@ class GameClient {
                     opacity: 0, // 0% opacity
                     side: THREE.DoubleSide,
                     depthWrite: false,
-                    depthTest: false
+                    depthTest: true  // Enable depth testing so ship isn't obscured
                 });
                 
                 // Create the starfield from this mesh
                 this.starfield = new THREE.Mesh(geometry, material);
                 this.starfield.scale.set(75, 75, 75); // Large scale to surround player
+                
+                // Set render order to ensure starfield renders behind the ship
+                this.starfield.renderOrder = -1;
+                
                 starfieldGroup.add(this.starfield);
                 console.log(`Created starfield from mesh ${index + 1}`);
                 
@@ -4072,13 +4076,17 @@ class GameClient {
                     opacity: 0.7,
                     side: THREE.DoubleSide,
                     depthWrite: false,
-                    depthTest: false
+                    depthTest: true  // Enable depth testing so ship isn't obscured
                 });
                 
                 // Create the hyperspeed effect
                 this.hyperspeedEffect = new THREE.Mesh(geometry, material);
                 this.hyperspeedEffect.scale.set(20, 20, 20);
                 this.hyperspeedEffect.visible = true;
+                
+                // Set render order to ensure hyperspeed effect renders behind the ship
+                this.hyperspeedEffect.renderOrder = -1;
+                
                 starfieldGroup.add(this.hyperspeedEffect);
                 console.log(`Created hyperspeed effect from mesh ${index + 1}`);
             }
@@ -4088,7 +4096,10 @@ class GameClient {
         this.scene.add(starfieldGroup);
         this.starfieldGroup = starfieldGroup;
         
-        console.log("Starfield created using only the 3D model");
+        // Ensure the starfield group renders behind player ships
+        this.starfieldGroup.renderOrder = -1;
+        
+        console.log("Starfield created using only the 3D model - player ship will be fully opaque");
     }
 
     // Update starfield and hyperspeed effect positions
