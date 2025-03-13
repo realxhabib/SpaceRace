@@ -1798,130 +1798,6 @@ class GameClient {
         });
     }
 
-    // Completely revised starfield creation method
-    createDynamicStarfield() {
-        console.log("Creating improved starfield system");
-        
-        // Clear any existing starfields
-        if (this.starfield) {
-            this.scene.remove(this.starfield);
-        }
-        if (this.backgroundStarfieldContainer) {
-            this.scene.remove(this.backgroundStarfieldContainer);
-        }
-        
-        // Create background stars fixed to the camera
-        const backgroundStarCount = 6000;
-        const backgroundGeometry = new THREE.BufferGeometry();
-        const backgroundPositions = new Float32Array(backgroundStarCount * 3);
-        const backgroundSizes = new Float32Array(backgroundStarCount);
-        const backgroundColors = new Float32Array(backgroundStarCount * 3);
-        
-        // Create stars in a sphere around the camera
-        for (let i = 0; i < backgroundStarCount; i++) {
-            const i3 = i * 3;
-            
-            // Use spherical coordinates for even distribution
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            const radius = 2000;
-            
-            // Convert to Cartesian coordinates
-            backgroundPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-            backgroundPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-            backgroundPositions[i3 + 2] = radius * Math.cos(phi);
-            
-            // Random star sizes - small for background
-            backgroundSizes[i] = Math.random() * 1.0 + 0.5;
-            
-            // Simple white/blue stars
-            const brightness = 0.8 + Math.random() * 0.2;
-            backgroundColors[i3] = brightness;
-            backgroundColors[i3 + 1] = brightness;
-            backgroundColors[i3 + 2] = brightness;
-        }
-        
-        backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(backgroundPositions, 3));
-        backgroundGeometry.setAttribute('size', new THREE.BufferAttribute(backgroundSizes, 1));
-        backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(backgroundColors, 3));
-        
-        const backgroundMaterial = new THREE.PointsMaterial({
-            size: 1.5,
-            sizeAttenuation: false,
-            transparent: true,
-            opacity: 0.8,
-            vertexColors: true,
-            depthTest: false // Stars always visible
-        });
-        
-        this.backgroundStarfield = new THREE.Points(backgroundGeometry, backgroundMaterial);
-        
-        // Create container to allow positioning with camera
-        this.backgroundStarfieldContainer = new THREE.Object3D();
-        this.backgroundStarfieldContainer.add(this.backgroundStarfield);
-        this.scene.add(this.backgroundStarfieldContainer);
-        
-        // Create the foreground dynamic stars
-        const dynamicStarCount = 5000;
-        const starGeometry = new THREE.BufferGeometry();
-        const starPositions = new Float32Array(dynamicStarCount * 3);
-        const starSizes = new Float32Array(dynamicStarCount);
-        const starColors = new Float32Array(dynamicStarCount * 3);
-        
-        // Create stars with initial positions
-        for (let i = 0; i < dynamicStarCount; i++) {
-            const i3 = i * 3;
-            
-            // Random positions in a sphere
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            const radius = 300 + Math.random() * 700;
-            
-            starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-            starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-            starPositions[i3 + 2] = radius * Math.cos(phi);
-            
-            // Random sizes - slightly larger for foreground
-            starSizes[i] = Math.random() * 2.0 + 0.7;
-            
-            // Simple white/blue stars
-            const brightness = 0.8 + Math.random() * 0.2;
-            starColors[i3] = brightness;
-            starColors[i3 + 1] = brightness;
-            starColors[i3 + 2] = brightness;
-        }
-        
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-        
-        const starMaterial = new THREE.PointsMaterial({
-            size: 1.8,
-            sizeAttenuation: true,
-            transparent: true,
-            opacity: 1.0,
-            vertexColors: true,
-            depthTest: false // Stars always visible
-        });
-        
-        this.starfield = new THREE.Points(starGeometry, starMaterial);
-        this.scene.add(this.starfield);
-        
-        // Add necessary tracking properties to starfield
-        this.starfield.lastPlayerPosition = new THREE.Vector3(0, 0, 0);
-        this.starfield.speeds = new Float32Array(dynamicStarCount);
-        for (let i = 0; i < dynamicStarCount; i++) {
-            this.starfield.speeds[i] = Math.random() * 2 + 0.5;
-        }
-        
-        // Track reset timing
-        this.lastStarResetTime = Date.now();
-        this.lastResetDistance = 0;
-        this.startPlayerPosition = null;
-        
-        console.log("Improved starfield created with", dynamicStarCount, "dynamic stars and", backgroundStarCount, "background stars");
-    }
-
     // Unified star reset method
     resetStars(playerPosition) {
         if (!this.starfield || !this.starfield.geometry || 
@@ -1972,132 +1848,11 @@ class GameClient {
 
     // Single, consolidated updateStarfield method
     updateStarfield() {
-        // Skip if essential components are missing
-        if (!this.starfield || !this.localPlayer) return;
-        
-        // Get player mesh with safety checks
-        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
-        if (!playerId) return;
-        
-        const playerMesh = this.playerMeshes?.get(playerId);
-        if (!playerMesh) return;
-        
-        // Ensure background stars follow the camera
-        if (this.backgroundStarfieldContainer && this.camera) {
-            this.backgroundStarfieldContainer.position.copy(this.camera.position);
-        }
-        
-        // Initialize player reference position if needed
-        if (!this.startPlayerPosition) {
-            this.startPlayerPosition = playerMesh.position.clone();
-        }
-        
-        // Track player movement
-        if (!this.starfield.lastPlayerPosition) {
-            this.starfield.lastPlayerPosition = new THREE.Vector3(0, 0, 0);
-        }
-        
-        // Get positions array safely
-        const positions = this.starfield.geometry.attributes.position.array;
-        if (!positions) return;
-        
-        // Ensure speeds array exists
-        if (!this.starfield.speeds) {
-            this.starfield.speeds = new Float32Array(positions.length / 3);
-            for (let i = 0; i < this.starfield.speeds.length; i++) {
-                this.starfield.speeds[i] = Math.random() * 2 + 0.5;
-            }
-        }
-        
-        // Get player movement direction
-        const forwardDirection = new THREE.Vector3(0, 0, -1);
-        if (playerMesh.quaternion) {
-            forwardDirection.applyQuaternion(playerMesh.quaternion);
-        }
-        forwardDirection.normalize();
-        
-        // Get current distance and time
-        const distanceTraveled = this.localPlayer.distanceTraveled || 0;
-        const currentTime = Date.now();
-        
-        // Only reset based on time every 20 seconds - reduced frequency
-        if (currentTime - (this.lastStarResetTime || 0) > 20000) {
-            this.lastStarResetTime = currentTime;
-            console.log("Time-based star reset (partial)");
-            this.partialResetStars(playerMesh.position, forwardDirection);
-            return;
-        }
-        
-        // Reset based on distance - only after significant travel
-        if (!this.lastResetDistance) this.lastResetDistance = 0;
-        if (distanceTraveled - this.lastResetDistance > 800) {
-            this.lastResetDistance = distanceTraveled;
-            console.log("Distance-based star regeneration (ahead only)");
-            this.regenerateStarsAhead(playerMesh.position, forwardDirection);
-            return;
-        }
-        
-        // Get player speed for scaling
-        let moveSpeed = 1.0;
-        if (this.controls && typeof this.controls.baseSpeed === 'number') {
-            moveSpeed = this.controls.baseSpeed * 0.5; // Reduced for visual balance
-        }
-        
-        // Move stars to create motion illusion
-            for (let i = 0; i < positions.length; i += 3) {
-            // Move stars based on player direction
-            positions[i] -= forwardDirection.x * this.starfield.speeds[i / 3] * moveSpeed;
-            positions[i + 1] -= forwardDirection.y * this.starfield.speeds[i / 3] * moveSpeed;
-            positions[i + 2] -= forwardDirection.z * this.starfield.speeds[i / 3] * moveSpeed;
-            
-            // Calculate vector from player to star
-            const toStar = new THREE.Vector3(
-                positions[i] - playerMesh.position.x,
-                positions[i + 1] - playerMesh.position.y,
-                positions[i + 2] - playerMesh.position.z
-            );
-            
-            // Calculate distance from player
-            const distSq = toStar.lengthSq();
-            
-            // Only reset stars if:
-            // 1. They're very far from the player (over 1500 units) OR
-            // 2. They're behind the player (dot product with forward direction is negative)
-            //    AND they're at least 400 units behind
-            const dotProduct = toStar.dot(forwardDirection);
-            
-            // Star is behind player AND far enough away, OR star is extremely far in any direction
-            if ((dotProduct < 0 && distSq > 400*400) || distSq > 1500*1500) {
-                // Create a new star ahead of the player
-                const theta = Math.random() * Math.PI * 2;
-                const phi = Math.acos(Math.random() * 0.6 - 0.3); // Focus more stars ahead
-                const radius = 400 + Math.random() * 300;
-                
-                // Base position on player's forward direction
-                // Get a position ahead of the player in their general direction
-                const adjustedDirection = forwardDirection.clone();
-                
-                // Add some randomness but keep the general forward direction
-                adjustedDirection.x += (Math.random() - 0.5) * 0.8;
-                adjustedDirection.y += (Math.random() - 0.5) * 0.8;
-                adjustedDirection.z += (Math.random() - 0.5) * 0.8;
-                adjustedDirection.normalize();
-                
-                // Position star ahead of player
-                positions[i] = playerMesh.position.x + adjustedDirection.x * radius;
-                positions[i + 1] = playerMesh.position.y + adjustedDirection.y * radius;
-                positions[i + 2] = playerMesh.position.z + adjustedDirection.z * radius;
-                
-                // Assign new random speed
-                this.starfield.speeds[i / 3] = Math.random() * 2 + 0.5;
-            }
-        }
-        
-        // Store current player position for next frame
-        this.starfield.lastPlayerPosition.copy(playerMesh.position);
-        
-        // Update geometry
-        this.starfield.geometry.attributes.position.needsUpdate = true;
+        // THIS IS THE ONLY VALID IMPLEMENTATION
+        // DEFINED NEAR THE END OF THE CLASS
+        // If you see this implementation, it will be overridden by the one defined later
+        console.log("Using definitive starfield implementation defined later in the class");
+        return;
     }
     
     // Method to regenerate stars only ahead of the player
@@ -2106,8 +1861,8 @@ class GameClient {
             !this.starfield.geometry.attributes.position || !playerPosition) {
             return;
         }
-        
-        const positions = this.starfield.geometry.attributes.position.array;
+
+            const positions = this.starfield.geometry.attributes.position.array;
         
         // Determine how many stars to regenerate (30% of total)
         const totalStars = positions.length / 3;
@@ -2178,9 +1933,9 @@ class GameClient {
     partialResetStars(playerPosition, forwardDirection) {
         if (!this.starfield || !this.starfield.geometry || 
             !this.starfield.geometry.attributes.position || !playerPosition) {
-            return;
-        }
-        
+                return;
+            }
+            
         const positions = this.starfield.geometry.attributes.position.array;
         
         // Reset about 20% of stars, prioritizing those far from the player
@@ -3125,9 +2880,19 @@ class GameClient {
                 ).then(models => models.filter(model => model !== null));
                 
                 console.log(`Loaded ${this.models.ships.length} ship models`);
-        } catch (error) {
+            } catch (error) {
                 console.warn('Failed to load ship models, using fallback:', error);
                 this.models.ships = [];
+            }
+            
+            // Load the starfield/hyperspeed model
+            console.log('Loading starfield model...');
+            try {
+                this.models.starfield = await this.loadSingleModel(loader, './models/starfield/hyperspeed_starfield.glb');
+                console.log('Starfield model loaded successfully');
+        } catch (error) {
+                console.warn('Failed to load starfield model, will use particle-based fallback:', error);
+                this.models.starfield = null;
             }
             
             // Try to load asteroid models from the specified files
@@ -3214,58 +2979,6 @@ class GameClient {
         });
     }
 
-    updateCameraZoom() {
-        if (!this.camera || !this.localPlayer) return;
-        
-        // Get player mesh using the same pattern as updateMovement
-        let playerId = null;
-        if (this.singlePlayerMode) {
-            playerId = 'local-player';
-        } else if (this.network && this.network.playerId) {
-            playerId = this.network.playerId;
-        }
-        
-        if (!playerId) return;
-        
-        const playerMesh = this.playerMeshes.get(playerId);
-        if (!playerMesh) return;
-
-        // Remove camera from ship if it's a child
-        if (this.camera.parent === playerMesh) {
-            const worldPosition = this.camera.getWorldPosition(new THREE.Vector3());
-            const worldQuaternion = this.camera.getWorldQuaternion(new THREE.Quaternion());
-            playerMesh.remove(this.camera);
-            this.scene.add(this.camera);
-            this.camera.position.copy(worldPosition);
-            this.camera.quaternion.copy(worldQuaternion);
-        }
-
-        // Calculate desired camera position
-        const cameraOffset = new THREE.Vector3(
-            0,
-            this.cameraSettings.height,
-            this.cameraSettings.currentZoom
-        );
-        
-        // Get ship's world position
-        const shipPosition = playerMesh.getWorldPosition(new THREE.Vector3());
-        
-        // Calculate camera target position (behind and above ship)
-        const targetPosition = shipPosition.clone();
-        cameraOffset.applyQuaternion(playerMesh.quaternion);
-        targetPosition.add(cameraOffset);
-        
-        // Smoothly move camera to target position
-        this.camera.position.lerp(targetPosition, 0.1);
-        
-        // Calculate look target (ahead of ship)
-        const lookAhead = new THREE.Vector3(0, 0, -this.cameraSettings.lookAheadDistance);
-        lookAhead.applyQuaternion(playerMesh.quaternion);
-        const lookTarget = shipPosition.clone().add(lookAhead);
-        
-        // Make camera look at target point
-        this.camera.lookAt(lookTarget);
-    }
 
     updateDifficulty() {
         // Only update difficulty periodically
@@ -3712,7 +3425,7 @@ class GameClient {
             console.log(`SPEED INCREASED (FAST PHASE): Level ${oldLevel} → ${newLevel}`);
             console.log(`New base speed: ${this.controls.baseSpeed.toFixed(2)} (+${speedIncreaseInternal.toFixed(4)} units)`);
             console.log(`Current speed: ${Math.round(currentSpeedDisplay + speedIncrease)} km/h`);
-        } else {
+                    } else {
             // PHASE 2: DRAMATICALLY slower acceleration after 250
             // Calculate how far we are above threshold for extremely strong diminishing returns
             const excessSpeed = currentSpeedDisplay - speedThreshold;
@@ -3820,7 +3533,7 @@ class GameClient {
             // Safety check before calling resetEntireStarfield
             if (typeof this.resetEntireStarfield === 'function') {
                 this.resetEntireStarfield(playerMesh.position);
-            } else {
+                    } else {
                 // Fallback to resetStars if resetEntireStarfield doesn't exist
                 this.resetStars(playerMesh.position);
             }
@@ -4099,6 +3812,300 @@ class GameClient {
             
             this.handleAsteroidCollision(collisionResults[0]);
         }
+    }
+
+    
+
+    // Update just the hyperspeed effect position to follow the player
+    updateStarfield() {
+        // If starfield not initialized yet but model is now available, create it
+        if (!this.staticStarfield && this.models && this.models.starfield) {
+            console.log("Starfield model now available, initializing");
+            this.createDynamicStarfield();
+            return;
+        }
+        
+        // IMPORTANT: Only update the hyperspeed effect
+        // The stars must remain completely static in world space
+        if (!this.hyperspeedEffect) {
+            return;
+        }
+        
+        // Get player mesh with safety checks
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        if (!playerId) return;
+        
+        const playerMesh = this.playerMeshes?.get(playerId);
+        if (!playerMesh) return;
+        
+        // Get current boost state
+        const isBoosting = this.controls?.boost || false;
+        
+        // Position hyperspeed effect at player location
+        this.hyperspeedEffect.position.copy(playerMesh.position);
+        
+        // Align with player direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        forwardDirection.applyQuaternion(playerMesh.quaternion);
+        
+        // Set rotation to match player direction
+        const matrix = new THREE.Matrix4();
+        matrix.lookAt(
+            new THREE.Vector3(0, 0, 0), 
+            forwardDirection, 
+            new THREE.Vector3(0, 1, 0)
+        );
+        this.hyperspeedEffect.quaternion.setFromRotationMatrix(matrix);
+        
+        // Adjust hyperspeed effect based on boost state
+        if (this.hyperspeedEffect.material) {
+            if (isBoosting) {
+                this.hyperspeedEffect.material.opacity = 0.9;
+                this.hyperspeedEffect.material.color.setHex(0x00ffff);
+            } else {
+                this.hyperspeedEffect.material.opacity = 0.7;
+                this.hyperspeedEffect.material.color.setHex(0x00bbff);
+            }
+        }
+        
+        // CRITICAL: Do not move the starfield! It must remain fixed in world space
+        // The updateCameraZoom method will handle positioning the camera to follow the player
+    }
+
+    updateCameraZoom() {
+        if (!this.camera || !this.playerMeshes) return;
+        
+        const playerId = this.singlePlayerMode ? 'local-player' : (this.network?.playerId);
+        if (!playerId) return;
+        
+        const playerMesh = this.playerMeshes.get(playerId);
+        if (!playerMesh) return;
+        
+        // Initialize camera distance if not set
+        if (!this.cameraDistance) {
+            this.cameraDistance = 15; // Start more zoomed out (was 8)
+            this.minCameraDistance = 5; // Minimum zoom
+            this.maxCameraDistance = 30; // Maximum zoom
+            
+            // Add mouse wheel event listener for zoom if not added yet
+            if (!this.zoomControlsInitialized) {
+                window.addEventListener('wheel', this.handleMouseWheel.bind(this));
+                this.zoomControlsInitialized = true;
+                console.log("Zoom controls initialized");
+            }
+        }
+        
+        // Get player's forward direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1);
+        forwardDirection.applyQuaternion(playerMesh.quaternion);
+        
+        // Calculate camera position based on current distance
+        const cameraOffset = new THREE.Vector3();
+        cameraOffset.copy(forwardDirection).multiplyScalar(-this.cameraDistance); // Use dynamic distance
+        cameraOffset.y += Math.min(5, this.cameraDistance * 0.4); // Height scales with distance but caps at 5
+        
+        // Position camera behind and above player
+        const targetPosition = new THREE.Vector3();
+        targetPosition.copy(playerMesh.position).add(cameraOffset);
+        
+        // Use direct positioning for proper star movement effect
+        this.camera.position.copy(targetPosition);
+        
+        // Look ahead of the player
+        const lookAheadDistance = 20 + (this.cameraDistance * 0.5); // Look ahead scales with camera distance
+        const lookAtPoint = new THREE.Vector3();
+        lookAtPoint.copy(playerMesh.position).add(forwardDirection.clone().multiplyScalar(lookAheadDistance));
+        this.camera.lookAt(lookAtPoint);
+        
+        // Apply dynamic FOV based on speed and zoom
+        const isBoosting = this.controls?.boost || false;
+        const zoomFactor = 1 - ((this.cameraDistance - this.minCameraDistance) / 
+                               (this.maxCameraDistance - this.minCameraDistance)) * 0.2;
+        const baseFOV = isBoosting ? 85 : 75;
+        const targetFOV = baseFOV * zoomFactor; // FOV decreases slightly when zoomed out
+        
+        // Smoothly adjust the camera FOV
+        this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
+        this.camera.updateProjectionMatrix();
+    }
+    
+    // Handle mouse wheel for zoom controls
+    handleMouseWheel(event) {
+        if (!this.cameraDistance) return;
+        
+        // Adjust zoom based on wheel delta (smaller amount for smoother zooming)
+        const zoomSpeed = 0.8;
+        const zoomDelta = Math.sign(event.deltaY) * zoomSpeed;
+        
+        // Update camera distance with limits
+        this.cameraDistance = Math.max(this.minCameraDistance, 
+                             Math.min(this.maxCameraDistance, 
+                                     this.cameraDistance + zoomDelta));
+    }
+
+    // Creates a fixed starfield in absolute world coordinates
+    createDynamicStarfield() {
+        console.log("Creating absolute fixed starfield with proper movement effect");
+        
+        // Clean up any existing starfield elements
+        if (this.starfield) {
+            this.scene.remove(this.starfield);
+            this.starfield = null;
+        }
+        if (this.hyperspeedEffect) {
+            this.scene.remove(this.hyperspeedEffect);
+            this.hyperspeedEffect = null;
+        }
+        if (this.backgroundStarfieldContainer) {
+            this.scene.remove(this.backgroundStarfieldContainer);
+            this.backgroundStarfieldContainer = null;
+        }
+        if (this.starfieldTunnel) {
+            this.scene.remove(this.starfieldTunnel);
+            this.starfieldTunnel = null;
+        }
+        if (this.staticStarfield) {
+            this.scene.remove(this.staticStarfield);
+            this.staticStarfield = null;
+        }
+        
+        // Initialize loading of starfield model for hyperspeed effect
+        if (!this.models || !this.models.starfield) {
+            console.log("Starfield model not yet loaded, will initialize when model becomes available");
+            return;
+        }
+            
+        // Find meshes in the model for hyperspeed effect
+        console.log("Examining starfield model structure");
+        let meshCount = 0;
+        const meshes = [];
+        
+        this.models.starfield.traverse(child => {
+            if (child.isMesh) {
+                meshCount++;
+                console.log(`Found mesh #${meshCount}:`, child.name);
+                meshes.push(child);
+            }
+        });
+        
+        // Create the persistent hyperspeed effect using the model
+        let hyperspeedGeometry = null;
+        if (meshes.length > 1) {
+            hyperspeedGeometry = meshes[1].geometry.clone();
+            console.log("Using second mesh for hyperspeed effect:", meshes[1].name);
+        } else if (meshes.length > 0) {
+            hyperspeedGeometry = meshes[0].geometry.clone();
+            console.log("Using first mesh for hyperspeed effect:", meshes[0].name);
+        } else {
+            // Fallback cylinder
+            hyperspeedGeometry = new THREE.CylinderGeometry(100, 200, 2000, 32, 1, true);
+            console.log("Using fallback cylinder for hyperspeed effect");
+        }
+        
+        // Create a glowing material for the hyperspeed effect
+        const hyperspeedMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00bbff,
+            transparent: true,
+            opacity: 0.7,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: false
+        });
+        
+        // Create the hyperspeed mesh that follows the player
+        this.hyperspeedEffect = new THREE.Mesh(hyperspeedGeometry, hyperspeedMaterial);
+        this.hyperspeedEffect.scale.set(20, 20, 20);
+        this.hyperspeedEffect.position.set(0, 0, 0);
+        this.hyperspeedEffect.visible = true;
+        this.scene.add(this.hyperspeedEffect);
+        
+        // Create stars in absolute world space - completely independent
+        const absoluteStarfield = new THREE.Group();
+        this.staticStarfield = absoluteStarfield;
+        
+        const worldSize = 50000;
+        const numStars = 100000; // More stars for better effect
+        
+        console.log("Creating", numStars, "fixed stars in absolute world space");
+        
+        for (let i = 0; i < numStars; i++) {
+            // Position in absolute world space
+            let x, y, z;
+            
+            // Distribute stars with more along common travel paths
+            if (i % 4 === 0) { // 25% of stars
+                // Central play corridor
+                x = (Math.random() - 0.5) * 10000;
+                y = (Math.random() - 0.5) * 10000;
+                z = (Math.random() - 0.5) * 40000;
+            } else {
+                // Uniform distribution
+                x = (Math.random() - 0.5) * worldSize;
+                y = (Math.random() - 0.5) * worldSize;
+                z = (Math.random() - 0.5) * worldSize;
+            }
+            
+            // Star size
+            let size;
+            const sizeRand = Math.random();
+            if (sizeRand > 0.98) {
+                size = 6 + Math.random() * 4; // Very large stars (2%)
+            } else if (sizeRand > 0.95) {
+                size = 4 + Math.random() * 2; // Large stars (3%)
+            } else if (sizeRand > 0.85) {
+                size = 2 + Math.random() * 2; // Medium stars (10%)
+            } else if (sizeRand > 0.6) {
+                size = 1 + Math.random() * 1; // Small-medium stars (25%)
+            } else {
+                size = 0.5 + Math.random() * 0.5; // Small stars (60%)
+            }
+            
+            // Simplified geometry for performance
+            const segments = size > 4 ? 8 : (size > 2 ? 6 : 4);
+            const geometry = new THREE.SphereGeometry(size, segments, segments);
+            
+            // Varied brightness
+            const brightness = 0.6 + Math.random() * 0.4;
+            
+            // Varied colors
+            let color;
+            const colorRand = Math.random();
+            if (colorRand > 0.97) {
+                color = 0xff5050; // Bright red (3%)
+            } else if (colorRand > 0.94) {
+                color = 0xff8080; // Light red (3%)
+            } else if (colorRand > 0.90) {
+                color = 0x8080ff; // Blue (4%)
+            } else if (colorRand > 0.85) {
+                color = 0xffff80; // Yellow (5%)
+            } else if (colorRand > 0.80) {
+                color = 0xb0b0ff; // Light blue (5%)
+            } else {
+                color = 0xffffff; // White (80%)
+            }
+            
+            // Create material
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: brightness,
+                depthWrite: false,
+                depthTest: false
+            });
+            
+            // Create and position the star in ABSOLUTE world coordinates
+            const star = new THREE.Mesh(geometry, material);
+            star.position.set(x, y, z);
+            this.staticStarfield.add(star);
+        }
+        
+        // Add starfield directly to scene - not attached to any other object
+        this.scene.add(this.staticStarfield);
+        
+        // Mark as static world object
+        this.staticStarfield.userData.isStaticWorldObject = true;
+        
+        console.log("Fixed starfield created - stars will appear to move opposite to ship direction");
     }
 }
 
